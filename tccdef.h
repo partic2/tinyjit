@@ -1,7 +1,10 @@
+
 #ifndef _TCCDEF_H
 #define _TCCDEF_H 1
 
 #include <stdint.h>
+
+#include "config.h"
 #include "elf.h"
 
 #define ST_FUNC extern

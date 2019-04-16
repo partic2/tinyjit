@@ -1,6 +1,6 @@
 
 #ifndef _ARM_GEN_H
-#define _ARM_GEN_H
+#define _ARM_GEN_H 1
 
 
 

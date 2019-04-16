@@ -1,3 +1,5 @@
+#ifndef _I386_LINK_H
+#define _I386_LINK_H 1
 
 #define EM_TCC_TARGET EM_386
 
@@ -16,3 +18,5 @@
 
 #define PCRELATIVE_DLLPLT 0
 #define RELOCATE_DLLPLT 0
+
+#endif

@@ -475,3 +475,12 @@ ST_FUNC void xxx_gen_deinit(){
 }
 
 
+#ifdef TCC_TARGET_I386
+#include "i386-gen.c"
+#include "i386-link.c"
+#endif
+
+#ifdef TCC_TARGET_ARM
+#include "arm-gen.c"
+#include "arm-link.c"
+#endif

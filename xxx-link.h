@@ -1,5 +1,5 @@
 #ifndef _XXX_LINK_H
-#define _XXX_LINK_H
+#define _XXX_LINK_H 1
 
 #include "tccdef.h"
 #include <stdint.h>

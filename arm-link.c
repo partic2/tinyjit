@@ -34,7 +34,7 @@ int code_reloc (int reloc_type)
             return 1;
     }
 
-    tcc_error ("Unknown relocation type: %d", reloc_type);
+    tcc_error ("Unknown relocation type.");
     return -1;
 }
 
@@ -59,9 +59,7 @@ void relocate(ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t v
             {
                 int x, is_thumb, is_call, h, blx_avail, is_bl, th_ko;
                 x = (*(int *) ptr) & 0xffffff;
-#ifdef DEBUG_RELOC
-		printf ("reloc %d: x=0x%x val=0x%x ", type, x, val);
-#endif
+
                 (*(int *)ptr) &= 0xff000000;
                 if (x & 0x800000)
                     x -= 0x1000000;
@@ -75,7 +73,7 @@ void relocate(ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t v
                 h = x & 2;
                 th_ko = (x & 3) && (!blx_avail || !is_call);
                 if (th_ko || x >= 0x2000000 || x < -0x2000000)
-                    tcc_error("can't relocate value at %x,%d",addr, type);
+                    tcc_error("can't relocate value");
                 x >>= 2;
                 x &= 0xffffff;
                 /* Only reached if blx is avail and it is a call */
@@ -127,7 +125,7 @@ void relocate(ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t v
                 x = (x * 2) / 2;
                 x += val - addr;
                 if((x^(x>>1))&0x40000000)
-                    tcc_error("can't relocate value at %x,%d",addr, type);
+                    tcc_error("can't relocate value");
                 (*(int *)ptr) |= x & 0x7fffffff;
             }
         case R_ARM_ABS32:

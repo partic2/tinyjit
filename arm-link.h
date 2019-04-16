@@ -1,3 +1,7 @@
+
+#ifndef _ARM_LINK_H
+#define _ARM_LINK_H 1
+
 #define EM_TCC_TARGET EM_ARM
 
 /* relocation type for 32 bit data relocation */
@@ -16,4 +20,4 @@
 #define PCRELATIVE_DLLPLT 1
 #define RELOCATE_DLLPLT 0
 
-
+#endif

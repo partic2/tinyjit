@@ -1,3 +1,7 @@
+
+#ifndef _TCC_UTILS_H
+#define _TCC_UTILS_H 1
+
 #include "tccdef.h"
 #include <stdlib.h>
 #include <memory.h>
@@ -43,3 +47,5 @@ static inline void add64le(unsigned char *p, int64_t x) {
 #define tcc_realloc realloc
 #define tcc_malloc malloc
 #define tcc_free free
+
+#endif

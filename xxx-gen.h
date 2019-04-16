@@ -1,6 +1,6 @@
 
 #ifndef _XXX_GEN_H
-#define _XXX_GEN_H
+#define _XXX_GEN_H 1
 
 #include "tccdef.h"
 #include "tccelf.h"
@@ -150,6 +150,8 @@ ST_FUNC void gen_addr_of();
 ST_FUNC void gen_lval_of();
 ST_FUNC int is_lval();
 
+/* move lvalue */
+ST_FUNC int gen_lval_offset(int offset);
 /* get vtop low order (high order for BIG-ENDING?) part of vtop (size of vtop should be 2*REGISTER_SIZE)*/
 ST_FUNC void gen_low_order_part();
 /* get vtop high order (low order for BIG-ENDING?) part of vtop. */
@@ -167,7 +169,7 @@ static inline void greloc(Section *s, Sym *sym, unsigned long offset, int type)
 }
 #endif
 ST_FUNC void xxx_gen_init();
-
+ST_FUNC void xxx_gen_deinit();
 
 /* ------------- arch-gen----------- */
 
