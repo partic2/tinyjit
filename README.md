@@ -11,3 +11,8 @@ So the APIs are seemed like tinycc. But there are some differents.
 
 Now this project is incomplete. the arm and i386 backend can be used but have not been completely tested.
 the arm64 and x86_64 backend have not been ported.
+
+TODO:
+Run generated code in memory directly.
+Port x86_64 and arm64 backend.
+More test.

@@ -472,6 +472,8 @@ ST_FUNC void xxx_gen_init(){
 ST_FUNC void xxx_gen_deinit(){
     arch_gen_deinit();
     tcc_free(__vstack);
+    __vstack=NULL;
+    cur_text_section()->data_offset = ind;
 }
 
 

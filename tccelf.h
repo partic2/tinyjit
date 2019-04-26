@@ -79,8 +79,8 @@ ST_FUNC void put_elf_reloca(Section *symtab, Section *s, unsigned long offset,
                             int type, int symbol, addr_t addend);
 
 /* return the symbol number */
-ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size,
-    int info, int other, int shndx, const char *name);
+ST_FUNC int put_elf_sym(Section *s, addr_t value, unsigned long size,int info, int other, int shndx, const char *name);
+ST_FUNC int set_elf_sym(Section *s, addr_t value, unsigned long size,int info, int other, int shndx, const char *name);
 
 
 ST_FUNC int put_elf_str(Section *s, const char *sym);
@@ -94,4 +94,7 @@ ST_FUNC void tcc_output_object_file(FILE *f);
    This function handle ELF specific layout requirements */
 ST_FUNC void tcc_output_elf(FILE *f, int phnum, ElfW(Phdr) *phdr,
                            int file_offset, int *sec_order);
+
+ST_FUNC int tcc_load_object_file(FILE *f, unsigned long file_offset);
+
 #endif
