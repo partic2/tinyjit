@@ -64,6 +64,8 @@ int nb_sym_attrs;
 #define addr_t ElfW(Addr)
 #define ElfSym ElfW(Sym)
 
+#define RUN_SECTION_ALIGNMENT 0
+
 /* Browse each elem of type <type> in section <sec> starting at elem <startoff>
    using variable <elem> */
 #define for_each_elem(sec, startoff, elem, type)                               \
@@ -110,7 +112,7 @@ ST_FUNC void tccelf_delete() {
     free_section(priv_sections[i]);
   dynarray_reset(&priv_sections, &nb_priv_sections);
   tcc_free(sym_attrs);
-  sym_attrs=0;
+  sym_attrs = 0;
   symtab_section = NULL; /* for tccrun.c:rt_printline() */
 }
 
@@ -738,8 +740,6 @@ ST_FUNC void tcc_output_object_file(FILE *f) {
   sec_order = NULL;
   textrel = 0;
 
-  resolve_common_syms();
-
   /* we add a section for symbols */
   strsec = new_section(".shstrtab", SHT_STRTAB, 0);
   put_elf_str(strsec, "");
@@ -1087,4 +1087,134 @@ the_end:
   tcc_free(strsec);
   tcc_free(shdr);
   return ret;
+}
+
+/* relocate symbol table, resolve undefined symbols if do_resolve is
+   true and output error if undefined symbol. */
+ST_FUNC void relocate_syms(Section *symtab) {
+  ElfW(Sym) * sym;
+  int sym_bind, sh_num;
+  const char *name;
+
+  for_each_elem(symtab, 1, sym, ElfW(Sym)) {
+    sh_num = sym->st_shndx;
+    if (sh_num == SHN_UNDEF) {
+      name = (char *)symtab->link->data + sym->st_name;
+      /* Use ld.so to resolve symbol for us (for tcc -run) */
+      if (dynsym && find_elf_sym(dynsym, name))
+        goto found;
+      /* XXX: _fp_hw seems to be part of the ABI, so we ignore
+         it */
+      if (!strcmp(name, "_fp_hw"))
+        goto found;
+      /* only weak symbols are accepted to be undefined. Their
+         value is zero */
+      sym_bind = ELFW(ST_BIND)(sym->st_info);
+      if (sym_bind == STB_WEAK)
+        sym->st_value = 0;
+      else
+        tcc_error("undefined symbol.");
+    } else if (sh_num < SHN_LORESERVE) {
+      /* add section base */
+      sym->st_value += sections[sym->st_shndx]->sh_addr;
+    }
+  found:;
+  }
+}
+
+#ifdef TCC_IS_NATIVE
+/* relocate code. Return -1 on error, required size if ptr is NULL,
+   otherwise copy code into buffer passed by the caller */
+ST_FUNC int tcc_relocate(void *ptr, addr_t ptr_diff) {
+  Section *s;
+  unsigned offset, length, align, max_align, i, k, f;
+  addr_t mem, addr;
+
+  if (NULL == ptr) {
+    resolve_common_syms();
+    if (tcc_last_error() == NULL)
+      return -1;
+  }
+
+  offset = max_align = 0, mem = (addr_t)ptr;
+
+  for (k = 0; k < 2; ++k) {
+    f = 0, addr = k ? mem : mem + ptr_diff;
+    for (i = 1; i < nb_sections; i++) {
+      s = sections[i];
+      if (0 == (s->sh_flags & SHF_ALLOC))
+        continue;
+      if (k != !(s->sh_flags & SHF_EXECINSTR))
+        continue;
+      align = s->sh_addralign - 1;
+      if (++f == 1 && align < RUN_SECTION_ALIGNMENT)
+        align = RUN_SECTION_ALIGNMENT;
+      if (max_align < align)
+        max_align = align;
+      offset += -(addr + offset) & align;
+      s->sh_addr = mem ? addr + offset : 0;
+      offset += s->data_offset;
+    }
+  }
+
+  /* relocate symbols */
+  relocate_syms(symtab);
+  if (tcc_last_error())
+    return -1;
+
+  if (0 == mem)
+    return offset + max_align;
+
+  /* relocate each section */
+  for (i = 1; i < nb_sections; i++) {
+    s = sections[i];
+    if (s->reloc)
+      relocate_section(s);
+  }
+
+  for (i = 1; i < nb_sections; i++) {
+    s = sections[i];
+    if (0 == (s->sh_flags & SHF_ALLOC))
+      continue;
+    length = s->data_offset;
+    ptr = (void *)s->sh_addr;
+    if (s->sh_flags & SHF_EXECINSTR)
+      ptr = (char *)ptr - ptr_diff;
+    if (NULL == s->data || s->sh_type == SHT_NOBITS)
+      memset(ptr, 0, length);
+    else
+      memcpy(ptr, s->data, length);
+    /* mark executable sections as executable in memory */
+    // if (s->sh_flags & SHF_EXECINSTR)
+    //    set_pages_executable((char*)ptr + ptr_diff, length);
+  }
+
+  return 0;
+}
+#endif
+
+ST_FUNC int tcc_add_symbol(const char *name, const void *val) {
+  set_elf_sym(symtab_section, (uintptr_t)val, 0,
+              ELFW(ST_INFO)(STB_GLOBAL, STT_NOTYPE), 0, SHN_ABS, name);
+  return 0;
+}
+
+/* return elf symbol value, signal error if 'err' is nonzero */
+ST_FUNC addr_t get_elf_sym_addr(const char *name, int err) {
+  int sym_index;
+  ElfW(Sym) * sym;
+
+  sym_index = find_elf_sym(symtab, name);
+  sym = &((ElfW(Sym) *)symtab->data)[sym_index];
+  if (!sym_index || sym->st_shndx == SHN_UNDEF) {
+    if (err)
+      tcc_error("symbol not defined");
+    return 0;
+  }
+  return sym->st_value;
+}
+
+/* return elf symbol value */
+ST_FUNC void *tcc_get_symbol(const char *name) {
+  return (void *)(uintptr_t)get_elf_sym_addr(name, 0);
 }

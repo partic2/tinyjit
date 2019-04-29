@@ -6,10 +6,12 @@
 
 #include <stdio.h>
 
+#include "tcc-platform.h"
 
 static int testGenObjectFile(){
     FILE *f;
     Sym s;
+    int loc,r;
 
     printf("testGenObjectFile\n");
 
@@ -32,6 +34,16 @@ static int testGenObjectFile(){
     vtop->r=VT_LVAL|VT_LOCAL;
     gen_opi(TOK_UMULL);
 
+    vpop(1);
+
+    loc=alloc_local(8,8);
+    vpushl(VT_INT64,loc);
+    vtop->r=VT_LOCAL;
+    r=get_reg_of_cls(RC_INT);
+    load(r,vtop);
+    vtop->r=r;
+    vtop->c.r2=VT_CONST;
+    vtop->r|=VT_LVAL;
 
     gfunc_epilog();
     xxx_gen_deinit();
@@ -61,11 +73,8 @@ static int testLoadAndMergeObjectFile(){
 
     gfunc_prolog();
     
-
     vpushl(VT_INT32,16);
-    vtop->r=VT_LVAL|VT_LOCAL;
     vpushl(VT_INT32,20);
-    vtop->r=VT_LVAL|VT_LOCAL;
     gen_opi(TOK_UMULL);
 
 
@@ -84,9 +93,31 @@ static int testLoadAndMergeObjectFile(){
     printf("done\n");
     return 0;
 }
+#ifdef TCC_IS_NATIVE
+static int testRunInMemory(){
+    void *ptr;
+    FILE *f;
+    int i;
+    long long (*myfunc2)();
+    printf("testRunInMemory\n");
+    ptr=tcc_alloc_executable_memory(0x800);
+    tccelf_new();
+    f=fopen("myobj2.o","rb+");
+    tcc_load_object_file(f,0);
+    tcc_relocate(ptr,0);
+    myfunc2=tcc_get_symbol("myfunc2");
+    printf("myfunc2 return %lld\n",myfunc2());
+    tccelf_delete();
+    tcc_free_executable_memory(ptr,0x800);
+    printf("done\n");
+}
+#endif
 
 int main(int argc,char *argv[]){
     testGenObjectFile();
     testLoadAndMergeObjectFile();
+    #ifdef TCC_IS_NATIVE
+    testRunInMemory();
+    #endif
     return 0;
 }

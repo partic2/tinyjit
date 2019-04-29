@@ -15,6 +15,7 @@
 typedef uint32_t FLAG_GROUP;
 
 
+
 /* types */
 #define VT_TYPE      0xffff
 #define VT_VOID           0  /* void type */

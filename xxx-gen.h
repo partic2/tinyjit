@@ -16,15 +16,20 @@
 
 #define VT_LVAL      0x0100  /* var is an lvalue */
 
+#define TCCERR_GEN_START 0x100
+#define TCCERR_NOT_IMPLEMENT 0x101
+
+
 /* constant value */
 typedef union CValue {
     double d;
     float f;
     uint64_t i;
-    uint8_t r2;
+    uint8_t r2; /* the second register to store multi-word SValue. should be VT_CONST if not used*/
 } CValue;
 
-/* value on stack */
+/* value on vstack 
+DO NOT use same register to store different multi-word SValue */
 typedef struct SValue {
     CType type;      /* type */
     uint16_t r;      /* register + flags */
@@ -152,10 +157,15 @@ ST_FUNC int is_lval();
 
 /* move lvalue */
 ST_FUNC int gen_lval_offset(int offset);
-/* get vtop low order (high order for BIG-ENDING?) part of vtop (size of vtop should be 2*REGISTER_SIZE)*/
-ST_FUNC void gen_low_order_part();
-/* get vtop high order (low order for BIG-ENDING?) part of vtop. */
-ST_FUNC void gen_high_order_part();
+
+/* expand vtop into 2 SValues 
+    before calling:
+    vtop: the 2-words value.
+    after calling:
+    vtop: the high-order part.
+    vtop-1: the low-order part.
+*/
+ST_FUNC void gen_lexpand();
 
 static inline void vdup(void)
 {

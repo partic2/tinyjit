@@ -122,6 +122,7 @@ ST_FUNC void vsetc(CType *type, int r, CValue *vc)
     vtop->r = r;
     vtop->c.r2 = VT_CONST;
     vtop->c = *vc;
+    vtop->sym=NULL;
 }
 
 
@@ -196,44 +197,34 @@ ST_FUNC void save_rc_upstack(int rc,int n){
     }
 }
 
-/* get vtop low order (high order for BIG-ENDING?) part of vtop (size of vtop should be 2*REGISTER_SIZE)*/
-ST_FUNC void gen_low_order_part(){
-    int r;
+
+ST_FUNC void gen_lexpand(){
+    int r,r2;
     r=vtop->r;
-    vtop->type.t=REGISTER_SIZE;
-    if(!(r&VT_LVAL)){
-        r=r&VT_VALMASK;
-        if(r<VT_CONST){
-            vtop->c.r2=VT_CONST;
-        }
-    }
-    vtop->sym=NULL;
-}
-/* get vtop high order (low order for BIG-ENDING?) part of vtop. */
-ST_FUNC void gen_high_order_part(){
-    int r;
-    r=vtop->r;
-    vtop->type.t=REGISTER_SIZE;
+    vtop->type.t--;
     if(r&VT_LVAL){
+        vdup();
         gen_lval_offset(REGISTER_SIZE);
     }else{
         r=r&VT_VALMASK;
         if(r<VT_CONST){
-            vtop->r=vtop->c.r2;
+            r2=vtop->c.r2;
             vtop->c.r2=VT_CONST;
+            vdup();
+            vtop->r=r2;
         }else if(r==VT_CONST && !vtop->sym){
+            vdup();
             vtop->c.i>>=(REGISTER_SIZE<<3);
         }
     }
-    vtop->sym=NULL;
+    vtop[0].sym=NULL;
+    vtop[-1].sym=NULL;
 }
-
 
 ST_FUNC void gen_ldr_reg(int r){
     SValue *sv;
-    save_reg_upstack(r,1);
-    
     if(((vtop->r&VT_VALMASK)!=r)||(vtop->r&VT_LVAL)){
+        save_reg_upstack(r,1);
         load(r,vtop);
         vtop->r=r;
         vtop->c.r2=VT_CONST;
@@ -241,7 +232,7 @@ ST_FUNC void gen_ldr_reg(int r){
     vtop->sym=NULL;
 }
 ST_FUNC void save_reg_upstack(int r,int n){
-    int l, saved, size, align,r2;
+    int l, rloc, saved, size, align,r2;
     SValue *p, *p1, sv;
     CType *type;
 
@@ -251,17 +242,42 @@ ST_FUNC void save_reg_upstack(int r,int n){
     /* modify all stack values */
     saved = 0;
     l = 0;
+    rloc = 0;
+    /* found if register used in tow words value. */
     for(p = __vstack, p1 = vtop - n; p <= p1; p++) {
-        if ((p->r & VT_VALMASK) == r ||((p->r&VT_VALMASK<VT_CONST)&&(p->c.r2 == r))) {
+        if ((((p->r & VT_VALMASK) == r) && (p->c.r2 & VT_VALMASK) < VT_CONST)||
+            ((p->r & VT_VALMASK) < VT_CONST && (p->c.r2 & VT_VALMASK) == r)) {
+            /* must save value on stack if not already done */
+            size=size_align_of_type(p->type.t,&align);
+            //printf("p:%x\n",(((p->r & VT_VALMASK) == r) && (p->r & VT_VALMASK) < VT_CONST));
+            l=get_temp_local_var(size,align);
+            sv.type.t = p->type.t;
+            sv.r = VT_LOCAL | VT_LVAL;
+            sv.c.r2 = VT_CONST;
+            sv.c.i = l;
+            store(p->r & VT_VALMASK, &sv);
+            rloc=sv.c.i;
+            if(p->c.r2<VT_CONST){
+                sv.c.i+=get_reg_attr(p->r)->size;
+                store(p->c.r2,&sv);
+                if(p->c.r2==r){
+                    rloc=sv.c.i;
+                }
+            }
+            saved=1;
+            break;
+        }
+    }
+    for(p = __vstack, p1 = vtop - n; p <= p1; p++) {
+        if (((p->r & VT_VALMASK) == r) || ((p->c.r2 & VT_VALMASK) == r)) {
             if (!saved) {
                 /* must save value on stack if not already done */
                 r2=p->r & VT_VALMASK;
                 /* store register in the stack */
                 type = &p->type;
-                size = get_reg_attr(r2)->size;
-                align=size;
+                size=size_align_of_type(type->t,&align);
 				l=get_temp_local_var(size,align);
-
+                rloc=l;
                 sv.type.t = type->t;
                 sv.r = VT_LOCAL | VT_LVAL;
                 sv.c.r2 = VT_CONST;
@@ -269,11 +285,6 @@ ST_FUNC void save_reg_upstack(int r,int n){
                 
                 store(r2, &sv);
 
-                r2=p->c.r2 & VT_VALMASK;
-                if(r2<VT_CONST){
-                    sv.c.i+=REGISTER_SIZE;
-                    store(r2,&sv);
-                }
                 saved = 1;
             }
             /* mark that stack entry as being saved on the stack */
@@ -282,9 +293,11 @@ ST_FUNC void save_reg_upstack(int r,int n){
             } else {
                 p->r = (p->r & ~VT_VALMASK) | VT_LOCAL | VT_LVAL;
             }
-            p->c.r2 = VT_CONST;
-            
-            p->c.i = l;
+            if(p->c.r2&VT_VALMASK < VT_CONST){
+                p->c.i=l;
+            }else{
+                p->c.i = rloc;
+            }
         }
     }
 }
@@ -302,6 +315,7 @@ ST_FUNC int is_reg_free(int r,int upstack){
     }
     return 1;
 }
+
 /* get free register if r.c&rc==rc */
 ST_FUNC int get_reg_of_cls(int rc){
     SValue *p;
@@ -350,20 +364,14 @@ ST_FUNC int gen_ldr(){
             vtop->r=r;
             vtop->c.r2=VT_CONST;
         }else if(size==2*REGISTER_SIZE){
-            vdup();
-            gen_low_order_part();
-            r=get_reg_of_cls(RC_INT);
-            load(r,vtop);
-            get_reg_attr(r)->s|=RS_LOCKED;
+            gen_lexpand();
+            gen_ldr();
+            vswap();
+            gen_ldr();
+            vswap();
+            r2=vtop->r;
             vpop(1);
-            vdup();
-            gen_high_order_part();
-            r2=get_reg_of_cls(RC_INT);
-            load(r2,vtop);
-            vpop(1);
-            vtop->r=r;
             vtop->c.r2=r2;
-            get_reg_attr(r)->s&=~RS_LOCKED;
         }
     }
     vtop->sym=NULL;
@@ -401,7 +409,7 @@ ST_FUNC int get_temp_local_var(int size,int align){
 		for(p=__vstack;p<=vtop;p++) {
 			r=p->r&VT_VALMASK;
 			if(r==VT_LOCAL||r==VT_LLOCAL){
-				if(p->c.i==temp_var->location){
+				if((p->c.i >= temp_var->location) && (p->c.i <= temp_var->location+temp_var->size)){
 					free=0;
 					break;
 				}

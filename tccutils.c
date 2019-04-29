@@ -37,3 +37,7 @@ static char *error_message;
 ST_FUNC void tcc_error(char *message){
     error_message=message;
 }
+
+ST_FUNC char *tcc_last_error(){
+    return error_message;
+}

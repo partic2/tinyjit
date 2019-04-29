@@ -480,20 +480,14 @@ ST_FUNC void gfunc_epilog()
     /* set return value */
     btype=vtop->type.t;
 
-
     if(size_align_of_type(btype,&align)<=4){
         load(TREG_EAX,vtop);
     }else if((btype==VT_INT64) || (btype==(VT_INT64|VT_UNSIGNED))){
-        vdup();
-        gen_low_order_part();
-        gen_ldr_reg(TREG_EAX);
-        get_reg_attr(TREG_EAX)->s|=RS_LOCKED;
-        vpop(1);
-        vdup();
-        gen_high_order_part();
+        gen_lexpand();
         gen_ldr_reg(TREG_EDX);
+        vswap();
+        gen_ldr_reg(TREG_EAX);
         vpop(1);
-        get_reg_attr(TREG_EAX)->s&=~RS_LOCKED;
     }else if((btype==VT_FLOAT32) || (btype==VT_FLOAT64)){
         load(TREG_ST0,vtop);
     }else if(btype==VT_VOID){

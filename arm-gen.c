@@ -573,12 +573,6 @@ static void gcall_or_jmp(int is_jmp) {
   }
 }
 
-static void lexpand(){
-  vdup();
-  gen_low_order_part();
-  vswap();
-  gen_high_order_part();
-}
 static int unalias_ldbl(int btype) {
   return btype;
 }
@@ -820,7 +814,7 @@ again:
           /* XXX: implicit cast ? */
           size = 4;
           if ((pplan->sval->type.t & VT_TYPE) == VT_INT64) {
-            lexpand();
+            gen_lexpand();
             size = 8;
             r = gen_ldr();
             o(0xE52D0004 | (intr(r) << 12)); /* push r */
@@ -844,7 +838,7 @@ again:
 
       case CORE_CLASS:
         if ((pplan->sval->type.t & VT_TYPE) == VT_INT64) {
-          lexpand();
+          gen_lexpand();
           gen_ldr_reg(pplan->end);
           pplan->sval->c.r2 = vtop->r;
           vtop--;
@@ -1025,7 +1019,7 @@ ST_FUNC void gfunc_epilog(){
     case VT_INT64:
     case VT_INT64|VT_UNSIGNED:
 
-    lexpand();
+    gen_lexpand();
     gen_ldr_reg(TREG_R1);
     vswap();
     
@@ -1229,12 +1223,10 @@ void gen_opi(int op) {
     gen_ldr();
     vswap();
     gen_ldr();
-    vswap();
-    r = intr(vtop[-1].c.r2 = get_reg_of_cls(RC_INT));
+    r = intr(vtop[-1].c.r2 = vtop->r);
     c = vtop[-1].r;
     vpop(1);
-    o(0xE0800090 | (r << 16) | (intr(vtop->r) << 12) | (intr(c) << 8) |
-    intr(vtop[1].r));
+    o(0xE0800090 | (r << 16) | (intr(vtop->r) << 12) | (intr(c) << 8) | intr(r));
     vtop->type.t=VT_INT64;
     return;
   default:

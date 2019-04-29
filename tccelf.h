@@ -97,4 +97,14 @@ ST_FUNC void tcc_output_elf(FILE *f, int phnum, ElfW(Phdr) *phdr,
 
 ST_FUNC int tcc_load_object_file(FILE *f, unsigned long file_offset);
 
+/* relocate code. Return -1 on error, required size if ptr is NULL,
+   otherwise copy code into buffer passed by the caller */
+ST_FUNC int tcc_relocate(void *ptr, addr_t ptr_diff);
+
+ST_FUNC int tcc_add_symbol(const char *name, const void *val);
+
+ST_FUNC addr_t get_elf_sym_addr(const char *name, int err);
+
+ST_FUNC void *tcc_get_symbol(const char *name);
+
 #endif
