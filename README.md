@@ -1,3 +1,5 @@
+#tinyjit
+
 Tinyjit is a tiny jit engine.
 
 These code is partly fork from **tinycc**
@@ -18,3 +20,8 @@ TODO:
 Port x86_64 and arm64 backend.
 
 More test.
+
+
+#How to use
+
+See test.c and the header files for help.
