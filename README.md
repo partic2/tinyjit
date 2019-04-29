@@ -1,4 +1,4 @@
-#tinyjit
+# tinyjit
 
 Tinyjit is a tiny jit engine.
 
@@ -15,13 +15,13 @@ Now this project is incomplete. the arm and i386 backend can be used but have no
 the arm64 and x86_64 backend have not been ported.
 
 
-TODO:
+# TODO:
 
 Port x86_64 and arm64 backend.
 
 More test.
 
 
-#How to use
+# How to use
 
 See test.c and the header files for help.
