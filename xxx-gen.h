@@ -115,7 +115,6 @@ struct reg_attr{
 
 extern uint32_t ind, loc;
 
-ST_FUNC int pvtop_set(int pos);
 ST_FUNC uint32_t get_VT_INT_TYPE_of_size(unsigned int size);
 ST_FUNC unsigned int size_align_of_type(uint32_t type,unsigned int *align);
 ST_FUNC void vpush(CType *type);

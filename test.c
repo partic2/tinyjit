@@ -28,7 +28,7 @@ static int testGenObjectFile(){
     gfunc_prolog();
     
 
-    vpushl(VT_INT32,16);
+    vpushl(VT_INT16,16);
     vtop->r=VT_LVAL|VT_LOCAL;
     vpushl(VT_INT32,20);
     vtop->r=VT_LVAL|VT_LOCAL;

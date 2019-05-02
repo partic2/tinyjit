@@ -358,7 +358,7 @@ ST_FUNC int gen_ldr(){
         load(r,vtop);
     }else{
         size=size_align_of_type(vtop->type.t,&align);
-        if(size==REGISTER_SIZE){
+        if(size<=REGISTER_SIZE){
             r=get_reg_of_cls(RC_INT);
             load(r,vtop);
             vtop->r=r;
