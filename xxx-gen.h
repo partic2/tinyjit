@@ -55,6 +55,9 @@ If these register was used, their should be restore before calling  gfunc_epilog
 
 #define RC_SPECIAL 0x0010
 
+/* TODO: The register should be unique on svalue stack */
+#define RC_UNIQUE_ONSTACK 0x0020
+
 /* register status */
 
 /* register has been locked and should not be free */

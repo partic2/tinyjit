@@ -33,9 +33,6 @@ enum {
 /* size of general purpose register */
 #define REGISTER_SIZE 4
 
-/* long double size and alignment, in bytes */
-#define LDOUBLE_SIZE  12
-#define LDOUBLE_ALIGN 4
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 

@@ -91,11 +91,11 @@ ST_FUNC void vset(CType *type, int r, int v)
     vsetc(type, r, &cval);
 }
 
-
+#ifndef USE_ARCH_DEFINED_VSETC
 ST_FUNC void vsetc(CType *type, int r, CValue *vc)
 {
     int v;
-
+    
     if (vtop >= __vstack + (VSTACK_SIZE - 1))
         tcc_error("memory full (vstack)");
     /* cannot let cpu flags if other instruction are generated. Also
@@ -124,6 +124,7 @@ ST_FUNC void vsetc(CType *type, int r, CValue *vc)
     vtop->c = *vc;
     vtop->sym=NULL;
 }
+#endif
 
 
 static void vseti(int r, int v)
@@ -165,10 +166,12 @@ ST_FUNC void vrotb(int n)
     vtop[0] = tmp;
 }
 
-
+#ifndef USE_ARCH_DEFINED_VPOP
 ST_FUNC void vpop(int n){
     vtop-=n;
 }
+#endif
+
 ST_FUNC void vswap(void)
 {
     SValue tmp;
