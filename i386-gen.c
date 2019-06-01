@@ -38,7 +38,7 @@ static struct reg_attr regs_attr [NB_REGS] = {
     /* ebp */ {RC_SPECIAL,REGISTER_SIZE},
     /* esi */ {RC_INT | RC_CALLEE_SAVED,REGISTER_SIZE},
     /* edi */ {RC_INT | RC_CALLEE_SAVED,REGISTER_SIZE},
-    /* st0 */ { RC_SPECIAL , 96 },
+    /* st0 */ { RC_STACK_MODEL | RC_FLOAT | RC_CALLER_SAVED , 80 },
 };
 
 static unsigned long func_sub_sp_offset;
@@ -166,11 +166,6 @@ ST_FUNC void load(int r, SValue *sv)
     int v, t, ft, fc, fr;
     SValue v1;
 
-#ifdef TCC_TARGET_PE
-    SValue v2;
-    sv = pe_getimport(sv, &v2);
-#endif
-
     fr = sv->r;
     ft = sv->type.t & VT_TYPE;
     fc = sv->c.i;
@@ -250,6 +245,11 @@ ST_FUNC void store(int r, SValue *v)
     ft &= VT_TYPE;
     bt = ft & VT_TYPE;
     /* XXX: incorrect if float reg to reg */
+    if(r==TREG_ST0 && !(v->r&VT_LVAL)){
+        tcc_error("float reg to reg is illegal.");
+        return;
+    }
+
     if (bt == VT_FLOAT32) {
         o(0xd9); /* fsts */
         r = 2;
@@ -260,7 +260,11 @@ ST_FUNC void store(int r, SValue *v)
         o(0xc0d9); /* fld %st(0) */
         o(0xdb); /* fstpt */
         r = 7;
-    } else {
+    } else if(bt == VT_VOID){
+        if(r == TREG_ST0){
+            o(0xd8dd); /* fstp %st(0) */
+        }
+    }else {
         if (is_same_size_int(bt,VT_INT16))
             o(0x66);
         if (is_same_size_int(bt,VT_INT8))
@@ -777,24 +781,18 @@ ST_FUNC void gen_opf(int op)
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         vswap();
-        load(TREG_ST0,vtop);
-        vtop->r=TREG_ST0;
-        vtop->c.r2=VT_CONST;
+        gen_ldr_reg(TREG_ST0);
         vswap();
     }
     if ((vtop[0].r & (VT_VALMASK | VT_LVAL)) == VT_CONST){
-        load(TREG_ST0,vtop);
-        vtop->r=TREG_ST0;
-        vtop->c.r2=VT_CONST;
+        gen_ldr_reg(TREG_ST0);
     }
 
     /* must put at least one value in the floating point register */
     if ((vtop[-1].r & VT_LVAL) &&
         (vtop[0].r & VT_LVAL)) {
         vswap();
-        load(TREG_ST0,vtop);
-        vtop->r=TREG_ST0;
-        vtop->c.r2=VT_CONST;
+        gen_ldr_reg(TREG_ST0);
         vswap();
     }
     swapped = 0;
@@ -891,10 +889,6 @@ ST_FUNC void gen_opf(int op)
         //}
         vpop(1);
     }
-    size=size_align_of_type(vtop->type.t,&align);
-    vtop->r=VT_LOCAL|VT_LVAL;
-    vtop->c.i=get_temp_local_var(vtop->type.t,align);
-    store(TREG_ST0,vtop);
 }
 
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
@@ -925,17 +919,13 @@ ST_FUNC void gen_cvt_itof(int t)
     }else{
         tcc_error("not supported type.");
     }
-    size=size_align_of_type(vtop->type.t,&align);
-    vtop->r=VT_LOCAL|VT_LVAL;
-    vtop->c.i=get_temp_local_var(vtop->type.t,align);
-    store(TREG_ST0,vtop);
+    vtop->r=TREG_ST0;
+    vtop->c.r2=VT_CONST;
 }
 
 ST_FUNC void gen_cvt_ftoi(int type){
     int saved_cw,new_cw,r,l;
     
-    load(TREG_ST0,vtop);
-    vpop(1);
 
     /* save fpu control word */
     saved_cw=get_temp_local_var(4,2);
@@ -987,14 +977,17 @@ ST_FUNC void gen_cvt_ftoi(int type){
         g(0xad);
         o(saved_cw);
     }
-    
+
+    vswap();
+    gen_ldr_reg(TREG_ST0);
+
     switch(type){
         case VT_INT8:
         case VT_INT16:
         case VT_INT32:
         /* fistpl xxx(%ebp) */
         l=get_temp_local_var(4,4);
-        vpushi(l);
+        vtop->c.i=l;
         vtop->type.t=type;
         vtop->r=VT_LOCAL|VT_LVAL;
         if(l == (char)l){
@@ -1010,7 +1003,7 @@ ST_FUNC void gen_cvt_ftoi(int type){
         case VT_INT64:
         /* fistpll xxx(%ebp) */
         l=get_temp_local_var(8,8);
-        vpushi(l);
+        vtop->c.i=l;
         vtop->type.t=type;
         vtop->r=VT_LOCAL|VT_LVAL;
         if(l == (char)l){

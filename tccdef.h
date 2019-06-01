@@ -23,6 +23,7 @@ typedef uint32_t FLAG_GROUP;
 #define VT_INT16       0x02  /* short type */
 #define VT_INT32       0x03  /* integer type */
 #define VT_INT64       0x04  /* 64 bit integer */
+#define VT_INT128      0x05
 #define VT_INTLAST      0x07  /* last int type */
 
 #define VT_UNSIGNED    0x08  /* flag for unsigned int */
@@ -30,6 +31,7 @@ typedef uint32_t FLAG_GROUP;
 
 #define VT_FLOAT32     0x10  /* IEEE float */
 #define VT_FLOAT64     0x11  /* IEEE double */
+#define VT_FLOAT128    0x12
 #define VT_FLOATLAST   0x15  /* last float type */
 
 #define is_float(a) (a >= VT_FLOAT32) && (a <= VT_FLOATLAST)
@@ -48,6 +50,10 @@ typedef uint32_t FLAG_GROUP;
 
 #ifdef TCC_TARGET_ARM
 #include "arm-gen.h"
+#endif
+
+#ifdef TCC_TARGET_X86_64
+#include "x86_64-gen.h"
 #endif
 
 #if PTR_SIZE == 8

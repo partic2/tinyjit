@@ -18,6 +18,10 @@ extern uint32_t output_format;
 #include "arm-link.h"
 #endif
 
+#ifdef TCC_TARGET_X86_64
+#include "x86_64-link.h"
+#endif
+
 /*------------arch-link.c---------------*/
 ST_FUNC int code_reloc (int reloc_type);
 ST_FUNC void relocate_init(Section *sr);

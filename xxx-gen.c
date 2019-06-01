@@ -168,7 +168,17 @@ ST_FUNC void vrotb(int n)
 
 #ifndef USE_ARCH_DEFINED_VPOP
 ST_FUNC void vpop(int n){
-    vtop-=n;
+    SValue *psv;
+    SValue sv;
+    for(psv=vtop;vtop-psv<n;psv--){
+        if((psv->r&VT_VALMASK)<VT_CONST){
+            if(get_reg_attr(psv->r)->c&RC_STACK_MODEL){
+                sv.type.t=VT_VOID;
+                store(psv->r&VT_VALMASK,&sv);
+            }
+        }
+    }
+    vtop=psv;
 }
 #endif
 
@@ -496,4 +506,9 @@ ST_FUNC void xxx_gen_deinit(){
 #ifdef TCC_TARGET_ARM
 #include "arm-gen.c"
 #include "arm-link.c"
+#endif
+
+#ifdef TCC_TARGET_X86_64
+#include "x86_64-gen.c"
+#include "x86_64-link.c"
 #endif

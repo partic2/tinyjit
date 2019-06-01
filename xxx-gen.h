@@ -55,13 +55,19 @@ If these register was used, their should be restore before calling  gfunc_epilog
 
 #define RC_SPECIAL 0x0010
 
-/* TODO: The register should be unique on svalue stack */
-#define RC_UNIQUE_ONSTACK 0x0020
+/* TODO/DRAFT : The register(s) work like a stack.
+After load(r,sv), the value should be PUSHed into the register
+After store(r,sv), the value should be POPed from the register
+When the Svalue of this register is poped by vpop(), 
+the value should also be POPed from the register 
+ */
+#define RC_STACK_MODEL 0x0020
 
 /* register status */
 
 /* register has been locked and should not be free */
 #define RS_LOCKED 0x0001
+
 
 
 struct reg_attr{
