@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+char TCC_ERROR_UNIMPLEMENTED[]="unimplemented";
+
 ST_FUNC void dynarray_add(void *ptab, int *nb_ptr, void *data)
 {
     int nb, nb_alloc;

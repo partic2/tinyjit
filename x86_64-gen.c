@@ -611,9 +611,10 @@ void gfunc_call(int nb_args,CType *ret_type)
 /* generate function prolog of type 't' */
 void gfunc_prolog()
 {
-    int addr, reg_param_index, bt, size;
-    Sym *sym;
+    int addr, reg_param_index, bt, size,i;
     CType *type;
+    SValue *psv;
+    struct reg_attr *rAttr;
 
     func_ret_sub = 0;
     func_scratch = 0;
@@ -625,56 +626,53 @@ void gfunc_prolog()
     func_sub_sp_offset = ind;
     reg_param_index = 0;
 
-    sym = func_type->ref;
 
-    /* if the function returns a structure, then add an
-       implicit pointer parameter */
-    func_vt = sym->type;
-    func_var = (sym->f.func_type == FUNC_ELLIPSIS);
-    size = gfunc_arg_size(&func_vt);
-    if (!using_regs(size)) {
-        gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
-        func_vc = addr;
-        reg_param_index++;
-        addr += 8;
-    }
-
+    
     /* define parameters */
-    while ((sym = sym->next) != NULL) {
-        type = &sym->type;
-        bt = type->t & VT_BTYPE;
+    for(psv=__vstack;psv<=vtop;psv++){
+        type = &psv->type;
+        bt = type->t & VT_TYPE;
         size = gfunc_arg_size(type);
         if (!using_regs(size)) {
             if (reg_param_index < REGN) {
                 gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
             }
-            sym_push(sym->v & ~SYM_FIELD, type,
-		     VT_LLOCAL | lvalue_type(type->t), addr);
+            psv->r=VT_LOCAL|VT_LVAL;
+            psv->c.i=addr;
+            psv->sym=NULL;
         } else {
             if (reg_param_index < REGN) {
-                /* save arguments passed by register */
-                if ((bt == VT_FLOAT) || (bt == VT_DOUBLE)) {
-		    if (tcc_state->nosse)
-		      tcc_error("SSE disabled");
-                    o(0xd60f66); /* movq */
-                    gen_modrm(reg_param_index, VT_LOCAL, NULL, addr);
+                if ((bt == VT_FLOAT32) || (bt == VT_FLOAT64)) {
+                    psv->r=TREG_XMM0+reg_param_index;
+                    psv->c.i=VT_CONST;
+                    psv->sym=NULL;
                 } else {
-                    gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
+                    psv->r=arg_regs[reg_param_index];
+                    psv->c.i=VT_CONST;
+                    psv->sym=NULL;
                 }
             }
-            sym_push(sym->v & ~SYM_FIELD, type,
-		     VT_LOCAL | lvalue_type(type->t), addr);
+            psv->r=VT_LOCAL|VT_LVAL;
+            psv->c.i=addr;
+            psv->sym=NULL;
         }
         addr += 8;
         reg_param_index++;
     }
 
     while (reg_param_index < REGN) {
-        if (func_type->ref->f.func_type == FUNC_ELLIPSIS) {
-            gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
-            addr += 8;
-        }
         reg_param_index++;
+    }
+    vpushi(PTR_SIZE*6);
+    vtop->r=VT_LOCAL;
+    vpushi(PTR_SIZE);
+    vtop->r=VT_LOCAL|VT_LVAL;
+    
+    for(i=0;i<NB_REGS;i++){
+        rAttr=get_reg_attr(i);
+        if(rAttr->c&RC_CALLEE_SAVED){
+            rAttr->s|=RS_LOCKED;
+        }
     }
 }
 
@@ -698,28 +696,21 @@ void gfunc_epilog(void)
     func_scratch = (func_scratch + 15) & -16;
     v = (func_scratch + -loc + 15) & -16;
 
-    if (v >= 4096) {
-        Sym *sym = external_global_sym(TOK___chkstk, &func_old_type, 0);
-        oad(0xb8, v); /* mov stacksize, %eax */
-        oad(0xe8, 0); /* call __chkstk, (does the stackframe too) */
-        greloca(cur_text_section, sym, ind-4, R_X86_64_PC32, -4);
-        o(0x90); /* fill for FUNC_PROLOG_SIZE = 11 bytes */
-    } else {
-        o(0xe5894855);  /* push %rbp, mov %rsp, %rbp */
-        o(0xec8148);  /* sub rsp, stacksize */
-        gen_le32(v);
-    }
+
+    o(0xe5894855);  /* push %rbp, mov %rsp, %rbp */
+    o(0xec8148);  /* sub rsp, stacksize */
+    gen_le32(v);
 
     /* add the "func_scratch" area after each alloca seen */
     while (func_alloca) {
-        unsigned char *ptr = cur_text_section->data + func_alloca;
+        unsigned char *ptr = cur_text_section()->data + func_alloca;
         func_alloca = read32le(ptr);
         write32le(ptr, func_scratch);
     }
 
-    cur_text_section->data_offset = saved_ind;
+    cur_text_section()->data_offset = saved_ind;
     pe_add_unwind_data(ind, saved_ind, v);
-    ind = cur_text_section->data_offset;
+    ind = cur_text_section()->data_offset;
 }
 
 #else
@@ -1315,9 +1306,7 @@ ST_FUNC int gtst(int inv, int t)
 {
     int v = vtop->r & VT_VALMASK;
 
-    if (nocode_wanted) {
-        ;
-    } else if (v == VT_CMP) {
+    if (v == VT_CMP) {
         /* fast case : can jump directly since flags are set */
 	if (vtop->c.i & 0x100)
 	  {
@@ -1367,10 +1356,10 @@ void gen_opi(int op)
 
     ll = is64_type(vtop[-1].type.t);
     uu = (vtop[-1].type.t & VT_UNSIGNED) != 0;
-    cc = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
+    cc = (vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST && (vtop->sym!=NULL);
 
     switch(op) {
-    case '+':
+    case TOK_ADD:
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
@@ -1402,7 +1391,7 @@ void gen_opi(int op)
             vtop->c.i = op;
         }
         break;
-    case '-':
+    case TOK_SUB:
     case TOK_SUBC1: /* sub with carry generation */
         opc = 5;
         goto gen_op8;
@@ -1412,16 +1401,16 @@ void gen_opi(int op)
     case TOK_SUBC2: /* sub with carry use */
         opc = 3;
         goto gen_op8;
-    case '&':
+    case TOK_AND:
         opc = 4;
         goto gen_op8;
-    case '^':
+    case TOK_XOR:
         opc = 6;
         goto gen_op8;
-    case '|':
+    case TOK_OR:
         opc = 1;
         goto gen_op8;
-    case '*':
+    case TOK_UMULL:
         gv2(RC_INT, RC_INT);
         r = vtop[-1].r;
         fr = vtop[0].r;
@@ -1449,10 +1438,17 @@ void gen_opi(int op)
             g(vtop->c.i & (ll ? 63 : 31));
         } else {
             /* we generate the shift in ecx */
-            gv2(RC_INT, RC_RCX);
-            r = vtop[-1].r;
+            /* we generate the shift in ecx */
+            save_reg_upstack(TREG_RCX,1);
+            gen_ldr_reg(TREG_RCX);
+			get_reg_attr(TREG_RCX)->s|=RS_LOCKED;
+            vswap();
+            gen_ldr();
+            r=vtop->r;
+            vswap();
             orex(ll, r, 0, 0xd3); /* shl/shr/sar %cl, r */
             o(opc | REG_VALUE(r));
+            get_reg_attr(TREG_RCX)->s&=~RS_LOCKED;
         }
         vtop--;
         break;
@@ -1460,8 +1456,8 @@ void gen_opi(int op)
     case TOK_UMOD:
         uu = 1;
         goto divmod;
-    case '/':
-    case '%':
+    case TOK_DIV:
+    case TOK_MOD:
     case TOK_PDIV:
         uu = 0;
     divmod:

@@ -16,5 +16,5 @@
 
 
 /*-------------host---------------*/
-//If host and target is in same.
+//If host is in the same as target.
 #define TCC_IS_NATIVE

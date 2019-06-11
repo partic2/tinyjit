@@ -619,7 +619,7 @@ ST_FUNC void gen_opi(int op)
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | !vtop->sym)) == VT_CONST) {
+        if ((vtop->r & (VT_VALMASK | VT_LVAL) == VT_CONST && !vtop->sym)) {
             /* constant case */
             vswap();
             gen_ldr();
@@ -698,7 +698,7 @@ ST_FUNC void gen_opi(int op)
         opc = 7;
     gen_shift:
         opc = 0xc0 | (opc << 3);
-        if ((vtop->r & (VT_VALMASK | VT_LVAL | !vtop->sym)) == VT_CONST) {
+        if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST && !vtop->sym) {
             /* constant case */
             vswap();
             gen_ldr();
@@ -727,6 +727,8 @@ ST_FUNC void gen_opi(int op)
     case TOK_UDIV:
     case TOK_UMOD:
     case TOK_UMULL:
+    case TOK_DIV:
+    case TOK_MOD:
         /* first operand must be in eax */
         /* XXX: need better constraint for second operand */
         save_reg_upstack(TREG_EDX,2);
@@ -764,8 +766,13 @@ ST_FUNC void gen_opi(int op)
         vtop->sym=NULL;
         break;
     default:
-        opc = 7;
-        goto gen_op8;
+        if(op>=TOK_ULT&&op<=TOK_GT){
+            opc = 7;
+            goto gen_op8;
+        }else{
+            tcc_error(TCC_ERROR_UNIMPLEMENTED);
+            return;
+        }
     }
 }
 
@@ -842,7 +849,6 @@ ST_FUNC void gen_opf(int op)
         */
         
         switch(op) {
-        default:
         case TOK_ADD:
             a = 0;
             break;
@@ -859,6 +865,9 @@ ST_FUNC void gen_opf(int op)
             if (swapped)
                 a++;
             break;
+        default:
+            tcc_error(TCC_ERROR_UNIMPLEMENTED);
+            return;
         }
         ft = vtop->type.t;
         fc = vtop->c.i;
@@ -915,7 +924,7 @@ ST_FUNC void gen_cvt_itof(int t)
         o(0x2404db); /* fildl (%esp) */
         o(0x04c483); /* add $4, %esp */
     }else{
-        tcc_error("not supported type.");
+        tcc_error(TCC_ERROR_UNIMPLEMENTED);
     }
     vtop->r=TREG_ST0;
     vtop->c.r2=VT_CONST;

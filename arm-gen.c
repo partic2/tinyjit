@@ -1217,7 +1217,7 @@ void gen_opi(int op) {
   case TOK_UDIV:
   case TOK_DIV:
   case TOK_UMOD:
-    tcc_error("unimplemented");
+    tcc_error(TCC_ERROR_UNIMPLEMENTED);
     return;
   case TOK_UMULL:
     gen_ldr();
@@ -1230,10 +1230,16 @@ void gen_opi(int op) {
     vtop->type.t=VT_INT64;
     return;
   default:
-    opc = 0x15;
-    c = 1;
-    break;
+    if(op>=TOK_ULT&&op<=TOK_GT){
+       opc = 0x15;
+      c = 1;
+      break;
+    }else{
+      tcc_error(TCC_ERROR_UNIMPLEMENTED);
+      return;
+    }
   }
+  
   switch (c) {
   case 1:
     if (((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) && (vtop->sym==NULL)) {
@@ -1290,10 +1296,10 @@ void gen_opi(int op) {
     vtop--;
     break;
   case 3:
-    tcc_error("unimplemented");
+    tcc_error(TCC_ERROR_UNIMPLEMENTED);
     break;
   default:
-    tcc_error("unimplemented");
+    tcc_error(TCC_ERROR_UNIMPLEMENTED);
   }
 }
 
@@ -1344,7 +1350,7 @@ void gen_opf(int op) {
     break;
   default:
     if (op < TOK_ULT || op > TOK_GT) {
-      tcc_error("unknown fp op");
+      tcc_error(TCC_ERROR_UNIMPLEMENTED);
       return;
     }
     if (is_zero(-1)) {
@@ -1434,9 +1440,9 @@ ST_FUNC void gen_cvt_itof(int t) {
     o(0xEEB80A40 | r2 | T2CPR(t)); /* fYitoX*/
     return;
   } else if (bt == VT_INT64) {
-    tcc_error("unimplemented!");
+    tcc_error(TCC_ERROR_UNIMPLEMENTED);
   }
-  tcc_error("unimplemented!");
+  tcc_error(TCC_ERROR_UNIMPLEMENTED);
 }
 
 /* convert fp to int 't' type */
@@ -1456,9 +1462,9 @@ void gen_cvt_ftoi(int t) {
     return;
 
   } else if (t == VT_INT64) { // unsigned handled in gen_cvt_ftoi1
-    tcc_error("unimplemented!"); 
+    tcc_error(TCC_ERROR_UNIMPLEMENTED); 
   }
-  tcc_error("unimplemented!");
+  tcc_error(TCC_ERROR_UNIMPLEMENTED);
 }
 
 

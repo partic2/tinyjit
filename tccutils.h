@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <memory.h>
 
+extern char TCC_ERROR_UNIMPLEMENTED[];
+
 /* return NULL if no error occured. */
 ST_FUNC char *tcc_last_error();
 

@@ -96,8 +96,8 @@ struct reg_attr{
 #define TOK_SAR   0x02 /* signed shift right */
 #define TOK_SHR   0x03 /* unsigned shift right */
 #define TOK_OR    0x04 /* bits or */
-#define TOK_AND   0x05 /* bits and*/
-#define TOK_XOR   0x06 /* bits xor*/
+#define TOK_AND   0x05 /* bits and */
+#define TOK_XOR   0x06 /* bits xor */
 
 
 /* optional */
@@ -116,6 +116,7 @@ struct reg_attr{
 #define TOK_SUBC2    0xc6 /* add with carry use */
 
 #define TOK_DIV   '/'
+#define TOK_MOD   '%'
 #define TOK_UDIV  0xb0 /* unsigned division */
 #define TOK_UMOD  0xb1 /* unsigned modulo */
 
