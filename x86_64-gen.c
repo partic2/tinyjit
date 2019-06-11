@@ -45,9 +45,6 @@ ST_DATA const struct  reg_attr regs_attr[NB_REGS] = {
     /* xmm3 */ {RC_FLOAT | RC_CALLER_SAVED,128},
     /* xmm4 */ {RC_FLOAT | RC_CALLER_SAVED,128},
     /* xmm5 */ {RC_FLOAT | RC_CALLER_SAVED,128},
-    /* xmm6 an xmm7 are included so gv() can be used on them,
-       but they are not tagged with RC_FLOAT because they are
-       callee saved on Windows */
     {RC_FLOAT | RC_CALLEE_SAVED,128},
     {RC_FLOAT | RC_CALLEE_SAVED,128},
     /* st0 */ {RC_STACK_MODEL|RC_FLOAT|RC_CALLER_SAVED,80},
@@ -507,7 +504,7 @@ static int gfunc_arg_size(CType *type) {
 
 void gfunc_call(int nb_args,CType *ret_type)
 {
-    int size, r, args_size, i, d, bt, struct_size;
+    int size, r, args_size, i, d, bt, struct_size, align;
     int arg;
 
     args_size = (nb_args < REGN ? REGN : nb_args) * PTR_SIZE;
@@ -528,11 +525,6 @@ void gfunc_call(int nb_args,CType *ret_type)
         if (using_regs(size))
             continue; /* arguments smaller than 8 bytes passed in registers or on stack */
 
-        if (bt == VT_LDOUBLE) {
-            gv(RC_ST0);
-            gen_offs_sp(0xdb, 0x107, struct_size);
-            struct_size += 16;
-        }
     }
 
     if (func_scratch < struct_size)
@@ -598,35 +590,26 @@ void gfunc_call(int nb_args,CType *ret_type)
     
     gcall_or_jmp(0);
 
-    if ((vtop->r & VT_SYM) && vtop->sym->v == TOK_alloca) {
-        /* need to add the "func_scratch" area after alloca */
-        o(0x0548), gen_le32(func_alloca), func_alloca = ind - 4;
+    vpop(1);
+    vpushi(0);
+    vtop->type=*ret_type;
+    bt=ret_type->t;
+    if(is_integer(bt)&&size_align_of_type(bt,&align)<=8){
+        vtop->r=TREG_RAX;
+        vtop->c.r2=VT_CONST;
+    }else if(bt==VT_FLOAT32 || bt==VT_FLOAT64){
+        vtop->r=TREG_ST0;
+        vtop->c.r2=VT_CONST;
+    }else{
+        tcc_error("unsuport value type.");
     }
-
-    /* other compilers don't clear the upper bits when returning char/short */
-    bt = vtop->type.ref->type.t & (VT_BTYPE | VT_UNSIGNED);
-    if (bt == (VT_BYTE | VT_UNSIGNED))
-        o(0xc0b60f);  /* movzbl %al, %eax */
-    else if (bt == VT_BYTE)
-        o(0xc0be0f); /* movsbl %al, %eax */
-    else if (bt == VT_SHORT)
-        o(0x98); /* cwtl */
-    else if (bt == (VT_SHORT | VT_UNSIGNED))
-        o(0xc0b70f);  /* movzbl %al, %eax */
-#if 0 /* handled in gen_cast() */
-    else if (bt == VT_INT)
-        o(0x9848); /* cltq */
-    else if (bt == (VT_INT | VT_UNSIGNED))
-        o(0xc089); /* mov %eax,%eax */
-#endif
-    vtop--;
 }
 
 
 #define FUNC_PROLOG_SIZE 11
 
 /* generate function prolog of type 't' */
-void gfunc_prolog(CType *func_type)
+void gfunc_prolog()
 {
     int addr, reg_param_index, bt, size;
     Sym *sym;

@@ -393,15 +393,13 @@ ST_FUNC void gfunc_call(int nb_args,CType *ret_type)
     btype=ret_type->t;
     if(is_integer(btype)&&size_align_of_type(btype,&align)<=4){
         vtop->r=TREG_EAX;
+        vtop->c.r2=VT_CONST;
     }else if(is_same_size_int(btype,VT_INT64)){
         vtop->r=TREG_EAX;
         vtop->c.r2=TREG_EDX;
     }else if(btype==VT_FLOAT32 || btype==VT_FLOAT64){
-        vtop->r=VT_LOCAL|VT_LVAL;
-        size=size_align_of_type(btype,&align);
-        vtop->c.i=get_temp_local_var(size,align);
-        store(TREG_ST0,vtop);
-        o(0xd8dd);
+        vtop->r=TREG_ST0;
+        vtop->c.r2=VT_CONST;
     }else{
         tcc_error("unsuport value type.");
     }
