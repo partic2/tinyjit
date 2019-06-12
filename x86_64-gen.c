@@ -23,9 +23,9 @@
 #include "xxx-gen.h"
 
 ST_DATA const struct  reg_attr regs_attr[NB_REGS] = {
-    /* eax */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE}
-    /* ecx */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE}
-    /* edx */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE}
+    /* eax */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE},
+    /* ecx */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE},
+    /* edx */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE},
     {RC_INT | RC_CALLEE_SAVED, REGISTER_SIZE},
     {RC_INT | RC_CALLEE_SAVED, REGISTER_SIZE},
     {RC_INT | RC_CALLEE_SAVED, REGISTER_SIZE},
@@ -1334,9 +1334,9 @@ ST_FUNC int gtst(int inv, int t)
             /* insert vtop->c jump list in t */
             uint32_t n1, n = vtop->c.i;
             if (n) {
-                while ((n1 = read32le(cur_text_section->data + n)))
+                while ((n1 = read32le(cur_text_section()->data + n)))
                     n = n1;
-                write32le(cur_text_section->data + n, t);
+                write32le(cur_text_section()->data + n, t);
                 t = vtop->c.i;
             }
         } else {
@@ -1366,7 +1366,7 @@ void gen_opi(int op)
         if (cc && (!ll || (int)vtop->c.i == vtop->c.i)) {
             /* constant case */
             vswap();
-            r = gv(RC_INT);
+            r = gen_ldr();
             vswap();
             c = vtop->c.i;
             if (c == (char)c) {
@@ -1379,7 +1379,9 @@ void gen_opi(int op)
                 oad(0xc0 | (opc << 3) | REG_VALUE(r), c);
             }
         } else {
-            gv2(RC_INT, RC_INT);
+            gen_ldr();
+            vswap();
+            gen_ldr();
             r = vtop[-1].r;
             fr = vtop[0].r;
             orex(ll, r, fr, (opc << 3) | 0x01);
@@ -1411,7 +1413,10 @@ void gen_opi(int op)
         opc = 1;
         goto gen_op8;
     case TOK_UMULL:
-        gv2(RC_INT, RC_INT);
+        gen_ldr();
+        vswap();
+        gen_ldr();
+        vswap();
         r = vtop[-1].r;
         fr = vtop[0].r;
         orex(ll, fr, r, 0xaf0f); /* imul fr, r */
@@ -1431,7 +1436,7 @@ void gen_opi(int op)
         if (cc) {
             /* constant case */
             vswap();
-            r = gv(RC_INT);
+            r = gen_ldr();
             vswap();
             orex(ll, r, 0, 0xc1); /* shl/shr/sar $xxx, r */
             o(opc | REG_VALUE(r));
@@ -1458,12 +1463,14 @@ void gen_opi(int op)
         goto divmod;
     case TOK_DIV:
     case TOK_MOD:
-    case TOK_PDIV:
         uu = 0;
     divmod:
         /* first operand must be in eax */
         /* XXX: need better constraint for second operand */
-        gv2(RC_RAX, RC_RCX);
+        gen_ldr_reg(TREG_RCX);
+        vswap();
+        gen_ldr_reg(TREG_RAX);
+        vswap();
         r = vtop[-1].r;
         fr = vtop[0].r;
         vtop--;
@@ -1483,34 +1490,38 @@ void gen_opi(int op)
     }
 }
 
-void gen_opl(int op)
-{
-    gen_opi(op);
+static void gvreg(int reg,int rc){
+    if(reg<0){
+        reg=get_reg_of_cls(rc);
+    }else{
+        save_reg_upstack(reg,0);
+    }
+    load(reg,vtop);
 }
-
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranteed to have the same floating point type */
 /* XXX: need to use ST1 too */
 void gen_opf(int op)
 {
     int a, ft, fc, swapped, r;
-    int float_type =
-        (vtop->type.t & VT_BTYPE) == VT_LDOUBLE ? RC_ST0 : RC_FLOAT;
+    int float_type_r =
+        (vtop->type.t & VT_TYPE) == VT_FLOAT128 ? TREG_ST0 : -1;
+    
 
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         vswap();
-        gv(float_type);
+        gvreg(float_type_r,RC_FLOAT);
         vswap();
     }
     if ((vtop[0].r & (VT_VALMASK | VT_LVAL)) == VT_CONST)
-        gv(float_type);
+        gvreg(float_type_r,RC_FLOAT);
 
     /* must put at least one value in the floating point register */
     if ((vtop[-1].r & VT_LVAL) &&
         (vtop[0].r & VT_LVAL)) {
         vswap();
-        gv(float_type);
+        gvreg(float_type_r,RC_FLOAT);
         vswap();
     }
     swapped = 0;
@@ -1520,7 +1531,7 @@ void gen_opf(int op)
         vswap();
         swapped = 1;
     }
-    if ((vtop->type.t & VT_BTYPE) == VT_LDOUBLE) {
+    if ((vtop->type.t & VT_TYPE) == VT_FLOAT128) {
         if (op >= TOK_ULT && op <= TOK_GT) {
             /* load on stack second operand */
             load(TREG_ST0, vtop);
@@ -1560,18 +1571,20 @@ void gen_opf(int op)
 
             switch(op) {
             default:
-            case '+':
+                tcc_error(TCC_ERROR_UNIMPLEMENTED);
+                return;
+            case TOK_ADD:
                 a = 0;
                 break;
-            case '-':
+            case TOK_SUB:
                 a = 4;
                 if (swapped)
                     a++;
                 break;
-            case '*':
+            case TOK_MULL:
                 a = 1;
                 break;
-            case '/':
+            case TOK_DIV:
                 a = 6;
                 if (swapped)
                     a++;
@@ -1590,8 +1603,8 @@ void gen_opf(int op)
             fc = vtop->c.i;
             if ((r & VT_VALMASK) == VT_LLOCAL) {
                 SValue v1;
-                r = get_reg(RC_INT);
-                v1.type.t = VT_PTR;
+                r = get_reg_of_cls(RC_INT);
+                v1.type.t = VT_INT64;
                 v1.r = VT_LOCAL | VT_LVAL;
                 v1.c.i = fc;
                 load(r, &v1);
@@ -1611,12 +1624,12 @@ void gen_opf(int op)
             }
 
             if (swapped) {
-                gv(RC_FLOAT);
+                gvreg(RC_FLOAT,-1);
                 vswap();
             }
             assert(!(vtop[-1].r & VT_LVAL));
             
-            if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE)
+            if ((vtop->type.t & VT_TYPE) == VT_FLOAT128)
                 o(0x66);
             if (op == TOK_EQ || op == TOK_NE)
                 o(0x2e0f); /* ucomisd */
@@ -1633,32 +1646,34 @@ void gen_opf(int op)
             vtop->r = VT_CMP;
             vtop->c.i = op | 0x100;
         } else {
-            assert((vtop->type.t & VT_BTYPE) != VT_LDOUBLE);
+            assert((vtop->type.t & VT_TYPE) != VT_FLOAT128);
             switch(op) {
             default:
-            case '+':
+            tcc_error(TCC_ERROR_UNIMPLEMENTED);
+            return;
+            case TOK_ADD:
                 a = 0;
                 break;
-            case '-':
+            case TOK_SUB:
                 a = 4;
                 break;
-            case '*':
+            case TOK_MULL:
                 a = 1;
                 break;
-            case '/':
+            case TOK_DIV:
                 a = 6;
                 break;
             }
             ft = vtop->type.t;
             fc = vtop->c.i;
-            assert((ft & VT_BTYPE) != VT_LDOUBLE);
+            assert((ft & VT_TYPE) != VT_FLOAT128);
             
             r = vtop->r;
             /* if saved lvalue, then we must reload it */
             if ((vtop->r & VT_VALMASK) == VT_LLOCAL) {
                 SValue v1;
-                r = get_reg(RC_INT);
-                v1.type.t = VT_PTR;
+                r = get_reg_of_cls(RC_INT);
+                v1.type.t = VT_INT64;
                 v1.r = VT_LOCAL | VT_LVAL;
                 v1.c.i = fc;
                 load(r, &v1);
@@ -1668,11 +1683,11 @@ void gen_opf(int op)
             assert(!(vtop[-1].r & VT_LVAL));
             if (swapped) {
                 assert(vtop->r & VT_LVAL);
-                gv(RC_FLOAT);
+                gvreg(RC_FLOAT,-1);
                 vswap();
             }
             
-            if ((ft & VT_BTYPE) == VT_DOUBLE) {
+            if ((ft & VT_TYPE) == VT_FLOAT64) {
                 o(0xf2);
             } else {
                 o(0xf3);
@@ -1695,17 +1710,17 @@ void gen_opf(int op)
    and 'long long' cases. */
 void gen_cvt_itof(int t)
 {
-    if ((t & VT_BTYPE) == VT_LDOUBLE) {
-        save_reg(TREG_ST0);
-        gv(RC_INT);
-        if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
+    if ((t & VT_TYPE) == VT_FLOAT128) {
+        save_reg_upstack(TREG_ST0,0);
+        gen_ldr();
+        if (is_same_size_int(vtop->type.t & VT_TYPE,VT_INT64)) {
             /* signed long long to float/double/long double (unsigned case
                is handled generically) */
             o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
             o(0x242cdf); /* fildll (%rsp) */
             o(0x08c48348); /* add $8, %rsp */
-        } else if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) ==
-                   (VT_INT | VT_UNSIGNED)) {
+        } else if ((vtop->type.t & VT_TYPE) ==
+                   (VT_INT32 | VT_UNSIGNED)) {
             /* unsigned int to float/double/long double */
             o(0x6a); /* push $0 */
             g(0x00);
@@ -1722,10 +1737,10 @@ void gen_cvt_itof(int t)
     } else {
         int r = get_reg(RC_FLOAT);
         gv(RC_INT);
-        o(0xf2 + ((t & VT_BTYPE) == VT_FLOAT?1:0));
-        if ((vtop->type.t & (VT_BTYPE | VT_UNSIGNED)) ==
-            (VT_INT | VT_UNSIGNED) ||
-            (vtop->type.t & VT_BTYPE) == VT_LLONG) {
+        o(0xf2 + ((t & VT_TYPE) == VT_FLOAT32?1:0));
+        if ((vtop->type.t & VT_TYPE) ==
+            (VT_INT32 | VT_UNSIGNED) ||
+            is_same_size_int(vtop->type.t & VT_TYPE,VT_INT64)) {
             o(0x48); /* REX */
         }
         o(0x2a0f);
@@ -1734,141 +1749,10 @@ void gen_cvt_itof(int t)
     }
 }
 
-/* convert from one floating point type to another */
-void gen_cvt_ftof(int t)
-{
-    int ft, bt, tbt;
-
-    ft = vtop->type.t;
-    bt = ft & VT_BTYPE;
-    tbt = t & VT_BTYPE;
-    
-    if (bt == VT_FLOAT) {
-        gv(RC_FLOAT);
-        if (tbt == VT_DOUBLE) {
-            o(0x140f); /* unpcklps */
-            o(0xc0 + REG_VALUE(vtop->r)*9);
-            o(0x5a0f); /* cvtps2pd */
-            o(0xc0 + REG_VALUE(vtop->r)*9);
-        } else if (tbt == VT_LDOUBLE) {
-            save_reg(RC_ST0);
-            /* movss %xmm0,-0x10(%rsp) */
-            o(0x110ff3);
-            o(0x44 + REG_VALUE(vtop->r)*8);
-            o(0xf024);
-            o(0xf02444d9); /* flds -0x10(%rsp) */
-            vtop->r = TREG_ST0;
-        }
-    } else if (bt == VT_DOUBLE) {
-        gv(RC_FLOAT);
-        if (tbt == VT_FLOAT) {
-            o(0x140f66); /* unpcklpd */
-            o(0xc0 + REG_VALUE(vtop->r)*9);
-            o(0x5a0f66); /* cvtpd2ps */
-            o(0xc0 + REG_VALUE(vtop->r)*9);
-        } else if (tbt == VT_LDOUBLE) {
-            save_reg(RC_ST0);
-            /* movsd %xmm0,-0x10(%rsp) */
-            o(0x110ff2);
-            o(0x44 + REG_VALUE(vtop->r)*8);
-            o(0xf024);
-            o(0xf02444dd); /* fldl -0x10(%rsp) */
-            vtop->r = TREG_ST0;
-        }
-    } else {
-        int r;
-        gv(RC_ST0);
-        r = get_reg(RC_FLOAT);
-        if (tbt == VT_DOUBLE) {
-            o(0xf0245cdd); /* fstpl -0x10(%rsp) */
-            /* movsd -0x10(%rsp),%xmm0 */
-            o(0x100ff2);
-            o(0x44 + REG_VALUE(r)*8);
-            o(0xf024);
-            vtop->r = r;
-        } else if (tbt == VT_FLOAT) {
-            o(0xf0245cd9); /* fstps -0x10(%rsp) */
-            /* movss -0x10(%rsp),%xmm0 */
-            o(0x100ff3);
-            o(0x44 + REG_VALUE(r)*8);
-            o(0xf024);
-            vtop->r = r;
-        }
-    }
-}
-
-/* convert fp to int 't' type */
-void gen_cvt_ftoi(int t)
-{
-    int ft, bt, size, r;
-    ft = vtop->type.t;
-    bt = ft & VT_BTYPE;
-    if (bt == VT_LDOUBLE) {
-        gen_cvt_ftof(VT_DOUBLE);
-        bt = VT_DOUBLE;
-    }
-
-    gv(RC_FLOAT);
-    if (t != VT_INT)
-        size = 8;
-    else
-        size = 4;
-
-    r = get_reg(RC_INT);
-    if (bt == VT_FLOAT) {
-        o(0xf3);
-    } else if (bt == VT_DOUBLE) {
-        o(0xf2);
-    } else {
-        assert(0);
-    }
-    orex(size == 8, r, 0, 0x2c0f); /* cvttss2si or cvttsd2si */
-    o(0xc0 + REG_VALUE(vtop->r) + REG_VALUE(r)*8);
-    vtop->r = r;
-}
 
 /* computed goto support */
 void ggoto(void)
 {
     gcall_or_jmp(1);
     vtop--;
-}
-
-/* Save the stack pointer onto the stack and return the location of its address */
-ST_FUNC void gen_vla_sp_save(int addr) {
-    /* mov %rsp,addr(%rbp)*/
-    gen_modrm64(0x89, TREG_RSP, VT_LOCAL, NULL, addr);
-}
-
-/* Restore the SP from a location on the stack */
-ST_FUNC void gen_vla_sp_restore(int addr) {
-    gen_modrm64(0x8b, TREG_RSP, VT_LOCAL, NULL, addr);
-}
-
-#ifdef TCC_TARGET_PE
-/* Save result of gen_vla_alloc onto the stack */
-ST_FUNC void gen_vla_result(int addr) {
-    /* mov %rax,addr(%rbp)*/
-    gen_modrm64(0x89, TREG_RAX, VT_LOCAL, NULL, addr);
-}
-#endif
-
-/* Subtract from the stack pointer, and push the resulting value onto the stack */
-ST_FUNC void gen_vla_alloc(CType *type, int align) {
-#ifdef TCC_TARGET_PE
-    /* alloca does more than just adjust %rsp on Windows */
-    vpush_global_sym(&func_old_type, TOK_alloca);
-    vswap(); /* Move alloca ref past allocation size */
-    gfunc_call(1);
-#else
-    int r;
-    r = gv(RC_INT); /* allocation size */
-    /* sub r,%rsp */
-    o(0x2b48);
-    o(0xe0 | REG_VALUE(r));
-    /* We align to 16 bytes rather than align */
-    /* and ~15, %rsp */
-    o(0xf0e48348);
-    vpop();
-#endif
 }
