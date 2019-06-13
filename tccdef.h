@@ -38,7 +38,7 @@ typedef uint32_t FLAG_GROUP;
 #define is_integer(a) !(a&0xfff0)
 #define VT_FUNC        0x16  /* function type */
 
-#define is_same_size_int(vt,ct) is_integer(vt) && (( vt | VT_UNSIGNED)==( ct | VT_UNSIGNED))
+#define is_same_size_int(vt,ct) (is_integer(vt) && (( vt | VT_UNSIGNED)==( ct | VT_UNSIGNED)))
 
 
 
