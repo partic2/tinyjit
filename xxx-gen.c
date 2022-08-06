@@ -33,7 +33,7 @@ ST_FUNC uint32_t get_VT_INT_TYPE_of_size(unsigned int size){
 }
 ST_FUNC unsigned int size_align_of_type(uint32_t type,uint32_t *align){
     unsigned int s;
-    if(type<=VT_INTLAST|VT_UNSIGNED){
+    if(type<=(VT_INTLAST|VT_UNSIGNED)){
         type &= ~VT_UNSIGNED;
         s=1<<(type-1);
     }else{
@@ -46,7 +46,10 @@ ST_FUNC unsigned int size_align_of_type(uint32_t type,uint32_t *align){
             break;
         }
     }
-    *align=s;
+    if(align!=NULL){
+        *align=s;
+    }
+    
     return s;
 }
 
@@ -96,7 +99,7 @@ ST_FUNC void vsetc(CType *type, int r, CValue *vc)
 {
     int v;
     
-    if (vtop >= __vstack + (VSTACK_SIZE - 1))
+    if (vtop >= vstack + (VSTACK_SIZE - 1))
         tcc_error("memory full (vstack)");
     /* cannot let cpu flags if other instruction are generated. Also
        avoid leaving VT_JMP anywhere except on the top of the stack
@@ -111,7 +114,7 @@ ST_FUNC void vsetc(CType *type, int r, CValue *vc)
        when code is unsuppressed again.
 
        Same logic below in vswap(); */
-    if (vtop >= __vstack) {
+    if (vtop >= vstack) {
         v = vtop->r & VT_VALMASK;
         if (v == VT_CMP || (v & ~1) == VT_JMP)
             gen_ldr();
@@ -120,7 +123,7 @@ ST_FUNC void vsetc(CType *type, int r, CValue *vc)
     vtop++;
     vtop->type = *type;
     vtop->r = r;
-    vtop->c.r2 = VT_CONST;
+    vtop->r2 = VT_CONST;
     vtop->c = *vc;
     vtop->sym=NULL;
 }
@@ -136,7 +139,7 @@ static void vseti(int r, int v)
 
 ST_FUNC void vpushv(SValue *v)
 {
-    if (vtop >= __vstack + (VSTACK_SIZE - 1))
+    if (vtop >= vstack + (VSTACK_SIZE - 1))
         tcc_error("memory full (vstack)");
     vtop++;
     *vtop = *v;
@@ -144,7 +147,7 @@ ST_FUNC void vpushv(SValue *v)
 
 
 /* push a symbol value of TYPE */
-static inline void vpushsym(CType *type, Sym *sym)
+ST_FUNC void vpushsym(CType *type, Sym *sym)
 {
     CValue cval;
     cval.i = 0;
@@ -186,7 +189,7 @@ ST_FUNC void vswap(void)
 {
     SValue tmp;
     /* cannot vswap cpu flags. See comment at vsetc() above */
-    if (vtop >= __vstack) {
+    if (vtop >= vstack) {
         int v = vtop->r & VT_VALMASK;
         if (v == VT_CMP || (v & ~1) == VT_JMP)
             gen_ldr();
@@ -204,7 +207,7 @@ ST_FUNC int alloc_local(int size,int align){
 ST_FUNC void save_rc_upstack(int rc,int n){
     int i=0;
     for(i=0;i<NB_REGS;i++){
-        if(get_reg_attr(i)->c&rc==rc && !get_reg_attr(i)->s&RS_LOCKED){
+        if((get_reg_attr(i)->c&rc)==rc && !get_reg_attr(i)->s&RS_LOCKED){
             save_reg_upstack(i,n);
         }
     }
@@ -221,31 +224,32 @@ ST_FUNC void gen_lexpand(){
     }else{
         r=r&VT_VALMASK;
         if(r<VT_CONST){
-            r2=vtop->c.r2;
-            vtop->c.r2=VT_CONST;
+            r2=vtop->r2;
+            vtop->r2=VT_CONST;
             vdup();
             vtop->r=r2;
         }else if(r==VT_CONST && !vtop->sym){
             vdup();
-            vtop->c.i>>=(REGISTER_SIZE<<3);
+            vtop->c.i>>=32;
         }
     }
     vtop[0].sym=NULL;
     vtop[-1].sym=NULL;
 }
 
-ST_FUNC void gen_ldr_reg(int r){
-    SValue *sv;
+ST_FUNC void gen_load_reg(int r){
     if(((vtop->r&VT_VALMASK)!=r)||(vtop->r&VT_LVAL)){
         save_reg_upstack(r,1);
         load(r,vtop);
         vtop->r=r;
-        vtop->c.r2=VT_CONST;
+        vtop->r2=VT_CONST;
     }
     vtop->sym=NULL;
 }
+
 ST_FUNC void save_reg_upstack(int r,int n){
-    int l, rloc, saved, size, align,r2;
+    int l, rloc, saved, size, r2;
+    uint32_t align;
     SValue *p, *p1, sv;
     CType *type;
 
@@ -257,23 +261,24 @@ ST_FUNC void save_reg_upstack(int r,int n){
     l = 0;
     rloc = 0;
     /* found if register used in tow words value. */
-    for(p = __vstack, p1 = vtop - n; p <= p1; p++) {
-        if ((((p->r & VT_VALMASK) == r) && (p->c.r2 & VT_VALMASK) < VT_CONST)||
-            ((p->r & VT_VALMASK) < VT_CONST && (p->c.r2 & VT_VALMASK) == r)) {
+    for(p = vstack, p1 = vtop - n; p <= p1; p++) {
+        if((p->r&VT_VALMASK)==VT_CONST)continue;
+        if ((((p->r & VT_VALMASK) == r) && (p->r2 & VT_VALMASK) < VT_CONST)||
+            ((p->r & VT_VALMASK) < VT_CONST && (p->r2 & VT_VALMASK) == r)) {
             /* must save value on stack if not already done */
             size=size_align_of_type(p->type.t,&align);
             //printf("p:%x\n",(((p->r & VT_VALMASK) == r) && (p->r & VT_VALMASK) < VT_CONST));
             l=get_temp_local_var(size,align);
             sv.type.t = p->type.t;
             sv.r = VT_LOCAL | VT_LVAL;
-            sv.c.r2 = VT_CONST;
+            sv.r2 = VT_CONST;
             sv.c.i = l;
             store(p->r & VT_VALMASK, &sv);
             rloc=sv.c.i;
-            if(p->c.r2<VT_CONST){
+            if(p->r2<VT_CONST){
                 sv.c.i+=get_reg_attr(p->r)->size;
-                store(p->c.r2,&sv);
-                if(p->c.r2==r){
+                store(p->r2,&sv);
+                if(p->r2==r){
                     rloc=sv.c.i;
                 }
             }
@@ -281,8 +286,8 @@ ST_FUNC void save_reg_upstack(int r,int n){
             break;
         }
     }
-    for(p = __vstack, p1 = vtop - n; p <= p1; p++) {
-        if (((p->r & VT_VALMASK) == r) || ((p->c.r2 & VT_VALMASK) == r)) {
+    for(p = vstack, p1 = vtop - n; p <= p1; p++) {
+        if (((p->r & VT_VALMASK) == r) || ((p->r2 & VT_VALMASK) == r)) {
             if (!saved) {
                 /* must save value on stack if not already done */
                 r2=p->r & VT_VALMASK;
@@ -293,7 +298,7 @@ ST_FUNC void save_reg_upstack(int r,int n){
                 rloc=l;
                 sv.type.t = type->t;
                 sv.r = VT_LOCAL | VT_LVAL;
-                sv.c.r2 = VT_CONST;
+                sv.r2 = VT_CONST;
                 sv.c.i = l;
                 
                 store(r2, &sv);
@@ -306,7 +311,7 @@ ST_FUNC void save_reg_upstack(int r,int n){
             } else {
                 p->r = (p->r & ~VT_VALMASK) | VT_LOCAL | VT_LVAL;
             }
-            if(p->c.r2&VT_VALMASK < VT_CONST){
+            if((p->r2&VT_VALMASK) < VT_CONST){
                 p->c.i=l;
             }else{
                 p->c.i = rloc;
@@ -320,9 +325,9 @@ ST_FUNC int is_reg_free(int r,int upstack){
 	if(get_reg_attr(r)->s&RS_LOCKED){
 		return 0;
 	}
-    for(p=__vstack;p<=vtop-upstack;p++){
+    for(p=vstack;p<=vtop-upstack;p++){
         if(((p->r&VT_VALMASK) ==r) || 
-            ((p->r&VT_VALMASK<VT_CONST) && (p->c.r2==r))){
+            (((p->r&VT_VALMASK)<VT_CONST) && (p->r2==r))){
             return 0;
         }
     }
@@ -334,7 +339,7 @@ ST_FUNC int get_reg_of_cls(int rc){
     SValue *p;
     int r,i;
     for(i=0;i<NB_REGS;i++){
-        if(get_reg_attr(i)->c&rc==rc){
+        if((get_reg_attr(i)->c&rc)==rc){
             if(is_reg_free(i,0)){
                 return i;
             }
@@ -343,9 +348,9 @@ ST_FUNC int get_reg_of_cls(int rc){
     /* no register left : free the first one on the stack (VERY
        IMPORTANT to start from the bottom to ensure that we don't
        spill registers used in gen_opi()) */
-    for(p=__vstack;p<=vtop;p++) {
+    for(p=vstack;p<=vtop;p++) {
         /* look at second register (if long long) */
-        r = p->c.r2 & VT_VALMASK;
+        r = p->r2 & VT_VALMASK;
         if (r < VT_CONST && ((get_reg_attr(r)->c & rc)==rc) && (get_reg_attr(r)->s&RS_LOCKED))
             goto save_found;
         r = p->r & VT_VALMASK;
@@ -359,7 +364,8 @@ ST_FUNC int get_reg_of_cls(int rc){
 }
 
 ST_FUNC int gen_ldr(){
-	int size,type,align,r,r2;
+	int size,type,r,r2;
+    uint32_t align;
     type=vtop->type.t;
     if((!(vtop->r&VT_LVAL))&&(vtop->r<VT_CONST)){
         if(is_reg_free(vtop->r&VT_VALMASK,1)){
@@ -369,13 +375,15 @@ ST_FUNC int gen_ldr(){
     if(is_float(type)){
         r=get_reg_of_cls(RC_FLOAT);
         load(r,vtop);
+        vtop->r=r;
+        vtop->r2=VT_CONST;
     }else{
         size=size_align_of_type(vtop->type.t,&align);
         if(size<=REGISTER_SIZE){
             r=get_reg_of_cls(RC_INT);
             load(r,vtop);
             vtop->r=r;
-            vtop->c.r2=VT_CONST;
+            vtop->r2=VT_CONST;
         }else if(size==2*REGISTER_SIZE){
             gen_lexpand();
             gen_ldr();
@@ -384,7 +392,7 @@ ST_FUNC int gen_ldr(){
             vswap();
             r2=vtop->r;
             vpop(1);
-            vtop->c.r2=r2;
+            vtop->r2=r2;
         }
     }
     vtop->sym=NULL;
@@ -419,7 +427,7 @@ ST_FUNC int get_temp_local_var(int size,int align){
 		}
 		/*check if temp_var is free*/
 		free=1;
-		for(p=__vstack;p<=vtop;p++) {
+		for(p=vstack;p<=vtop;p++) {
 			r=p->r&VT_VALMASK;
 			if(r==VT_LOCAL||r==VT_LLOCAL){
 				if((p->c.i >= temp_var->location) && (p->c.i <= temp_var->location+temp_var->size)){
@@ -465,16 +473,16 @@ ST_FUNC void gen_lval_of(){
 ST_FUNC int is_lval(){
     return vtop->r & VT_LVAL;
 }
-ST_FUNC int gen_lval_offset(int offset){
+ST_FUNC void gen_lval_offset(int offset){
     int r;
     r=vtop->r&VT_VALMASK;
     if(r<VT_CONST){
         gen_addr_of();
         vpushi(offset);
-        gen_opi(TOK_ADDC1);
+        gen_opi(TOK_ADD);
         gen_lval_of();
     }else if((r==VT_CONST)||(r==VT_LOCAL)){
-        vtop->c.i+=REGISTER_SIZE;
+        vtop->c.i+=offset;
     }
     
 }
@@ -485,7 +493,7 @@ ST_FUNC void xxx_gen_init(){
     int64_type.t=VT_INT64;
     ptr_type.t=get_VT_INT_TYPE_of_size(PTR_SIZE);
     ind=0;
-    __vstack=tcc_malloc(sizeof(SValue)*VSTACK_SIZE);
+    __vstack=tcc_malloc(sizeof(SValue)*VSTACK_SIZE+1);
     vtop=__vstack;
     arch_gen_init();
 }

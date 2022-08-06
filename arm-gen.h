@@ -86,6 +86,7 @@ enum {
 
 extern struct s_abi_config{
     int float_abi;
+    int eabi;
 } abi_config;
 
 /* float abi */

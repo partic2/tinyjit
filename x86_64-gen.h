@@ -1,3 +1,5 @@
+#ifndef _X86_64_GEN_H
+#define _X86_64_GEN_H
 
 /* number of available registers */
 #define NB_REGS         25
@@ -59,3 +61,5 @@ enum {
 #define LDOUBLE_ALIGN 16
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     16
+
+#endif

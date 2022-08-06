@@ -22,6 +22,7 @@ extern uint32_t output_format;
 #include "x86_64-link.h"
 #endif
 
+
 /*------------arch-link.c---------------*/
 ST_FUNC int code_reloc (int reloc_type);
 ST_FUNC void relocate_init(Section *sr);

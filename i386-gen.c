@@ -170,7 +170,6 @@ ST_FUNC void load(int r, SValue *sv)
     ft = sv->type.t & VT_TYPE;
     fc = sv->c.i;
 
-    ft &= VT_TYPE;
 
     v = fr & VT_VALMASK;
     if (fr & VT_LVAL) {
@@ -242,7 +241,6 @@ ST_FUNC void store(int r, SValue *v)
     ft = v->type.t;
     fc = v->c.i;
     fr = v->r & VT_VALMASK;
-    ft &= VT_TYPE;
     bt = ft & VT_TYPE;
     /* XXX: incorrect if float reg to reg */
     if(r==TREG_ST0 && !(v->r&VT_LVAL)){
@@ -305,10 +303,9 @@ static void gen_static_call(int v)
 /* 'is_jmp' is '1' if it is a jump */
 static void gcall_or_jmp(int is_jmp)
 {
-    int r;
     if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST && (vtop->sym)) {
         /* constant and relocation case */
-        greloc(cur_text_section(),vtop->sym, ind,R_386_PC32);
+        greloc(cur_text_section(),vtop->sym, ind+1 ,R_386_PC32);
         oad(0xe8 + is_jmp, vtop->c.i - 4); /* call/jmp im */
     } else {
         /* otherwise, indirect call */
@@ -323,14 +320,15 @@ static uint8_t fastcallw_regs[2] = { TREG_ECX, TREG_EDX };
 
 ST_FUNC void gfunc_call(int nb_args,CType *ret_type)
 {
-    int size, align, r, args_size, i, i1, func_call,btype;
+    int size, r, args_size, i, i1, func_call,btype;
+    uint32_t align;
     args_size = 0;
     for(i = 0;i < nb_args; i++) {
         
         if (is_float(vtop->type.t)) {
             load(TREG_ST0,vtop); /* only one float register */
             vtop->r=TREG_ST0;
-            vtop->c.r2=VT_CONST;
+            vtop->r2=VT_CONST;
             if ((vtop->type.t & VT_TYPE) == VT_FLOAT32)
                 size = 4;
             else if ((vtop->type.t & VT_TYPE) == VT_FLOAT64)
@@ -355,10 +353,10 @@ ST_FUNC void gfunc_call(int nb_args,CType *ret_type)
                 size=REGISTER_SIZE;
             }
             if(size==REGISTER_SIZE){
-                o(0x50 + vtop->r&VT_VALMASK); /* push r */
+                o(0x50 + (vtop->r&VT_VALMASK)); /* push r */
             }else if(size==REGISTER_SIZE*2){
-                o(0x50 + vtop->c.r2); /* push r2 */
-                o(0x50 + vtop->r&VT_VALMASK); /* push r */
+                o(0x50 + vtop->r2); /* push r2 */
+                o(0x50 + (vtop->r&VT_VALMASK)); /* push r */
             }else{
                 return;
             }
@@ -393,13 +391,13 @@ ST_FUNC void gfunc_call(int nb_args,CType *ret_type)
     btype=ret_type->t;
     if(is_integer(btype)&&size_align_of_type(btype,&align)<=4){
         vtop->r=TREG_EAX;
-        vtop->c.r2=VT_CONST;
+        vtop->r2=VT_CONST;
     }else if(is_same_size_int(btype,VT_INT64)){
         vtop->r=TREG_EAX;
-        vtop->c.r2=TREG_EDX;
+        vtop->r2=TREG_EDX;
     }else if(btype==VT_FLOAT32 || btype==VT_FLOAT64){
         vtop->r=TREG_ST0;
-        vtop->c.r2=VT_CONST;
+        vtop->r2=VT_CONST;
     }else{
         tcc_error("unsuport value type.");
     }
@@ -413,7 +411,8 @@ ST_FUNC void gfunc_call(int nb_args,CType *ret_type)
 
 ST_FUNC void gfunc_prolog()
 {
-    int align, size, i , i1, func_call,fastcall_nb_regs;
+    int size, i , i1, func_call,fastcall_nb_regs;
+    uint32_t align;
     SValue *sv;
     Sym *sym;
     CType *type;
@@ -433,7 +432,7 @@ ST_FUNC void gfunc_prolog()
     /* argument */
     i1=abi_config.func_call==FUNC_FASTCALLW ? 0 : 8;
 
-    for(sv=__vstack;sv<=vtop;sv++){
+    for(sv=vstack;sv<=vtop;sv++){
         if(abi_config.func_call==FUNC_FASTCALLW && i1 < 8){
             size=size_align_of_type(sv->type.t,&align);
             if(size<=4){
@@ -445,7 +444,7 @@ ST_FUNC void gfunc_prolog()
                 if(i1==2){
                     sv->type.t=VT_INT32;
                 }else{
-                    sv->c.r2=fastcallw_regs[i1];
+                    sv->r2=fastcallw_regs[i1];
                     i1+=4;
                 }
             }
@@ -456,9 +455,6 @@ ST_FUNC void gfunc_prolog()
             i1+=(size+3)&(~3);
         }
 	}
-    /* start addr of extend(stack) args */
-    vpushi(8);
-    vtop->r=VT_LOCAL;
     
      /* addr to next inst */
     vpushi(4);
@@ -477,7 +473,8 @@ ST_FUNC void gfunc_epilog()
 {
     addr_t v, saved_ind;
     SValue *sv;
-    int btype,r,n,align;
+    int btype,r,n;
+    uint32_t align;
 
     /* set return value */
     btype=vtop->type.t;
@@ -486,9 +483,9 @@ ST_FUNC void gfunc_epilog()
         load(TREG_EAX,vtop);
     }else if((btype==VT_INT64) || (btype==(VT_INT64|VT_UNSIGNED))){
         gen_lexpand();
-        gen_ldr_reg(TREG_EDX);
+        gen_load_reg(TREG_EDX);
         vswap();
-        gen_ldr_reg(TREG_EAX);
+        gen_load_reg(TREG_EAX);
         vpop(1);
     }else if((btype==VT_FLOAT32) || (btype==VT_FLOAT64)){
         load(TREG_ST0,vtop);
@@ -500,7 +497,7 @@ ST_FUNC void gfunc_epilog()
     o(0xc9); /* leave */
     n=0;
     if(abi_config.func_call == FUNC_STDCALL || abi_config.func_call == FUNC_FASTCALLW){
-        for(sv=__vstack;sv<vtop-2;sv++){
+        for(sv=vstack;sv<vtop-2;sv++){
             n+=size_align_of_type(sv->type.t,&align);
         }
         if(abi_config.func_call==FUNC_FASTCALLW){
@@ -532,7 +529,7 @@ ST_FUNC void gfunc_epilog()
 #endif
     }
     ind=saved_ind;
-    vpop(vtop-__vstack);
+    vpop(1);
     loc = 0;
 }
 
@@ -616,10 +613,11 @@ ST_FUNC void gen_opi(int op)
     int r, fr, opc, c;
 
     switch(op) {
+    case TOK_ADD:
     case TOK_ADDC1: /* add with carry generation */
         opc = 0;
     gen_op8:
-        if ((vtop->r & (VT_VALMASK | VT_LVAL) == VT_CONST && !vtop->sym)) {
+        if (((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST && !vtop->sym)) {
             /* constant case */
             vswap();
             gen_ldr();
@@ -658,6 +656,7 @@ ST_FUNC void gen_opi(int op)
             vtop->c.i = op;
         }
         break;
+    case TOK_SUB:
     case TOK_SUBC1: /* sub with carry generation */
         opc = 5;
         goto gen_op8;
@@ -711,7 +710,7 @@ ST_FUNC void gen_opi(int op)
         } else {
             /* we generate the shift in ecx */
             save_reg_upstack(TREG_ECX,1);
-            gen_ldr_reg(TREG_ECX);
+            gen_load_reg(TREG_ECX);
 			get_reg_attr(TREG_ECX)->s|=RS_LOCKED;
             vswap();
             gen_ldr();
@@ -734,10 +733,10 @@ ST_FUNC void gen_opi(int op)
         save_reg_upstack(TREG_EDX,2);
         save_reg_upstack(TREG_EAX, 2);
         save_reg_upstack(TREG_ECX,2);
-        gen_ldr_reg(TREG_ECX);
+        gen_load_reg(TREG_ECX);
         fr=vtop->r;
         vswap();
-        gen_ldr_reg(TREG_EAX);
+        gen_load_reg(TREG_EAX);
         r=vtop->r;
         vswap();
         
@@ -746,7 +745,7 @@ ST_FUNC void gen_opi(int op)
         if (op == TOK_UMULL) {
             o(0xf7); /* mul fr */
             o(0xe0 + fr);
-            vtop->c.r2 = TREG_EDX;
+            vtop->r2 = TREG_EDX;
             r = TREG_EAX;
             vtop->type.t=VT_INT64;
         } else {
@@ -786,18 +785,18 @@ ST_FUNC void gen_opf(int op)
     /* convert constants to memory references */
     if ((vtop[-1].r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
         vswap();
-        gen_ldr_reg(TREG_ST0);
+        gen_load_reg(TREG_ST0);
         vswap();
     }
     if ((vtop[0].r & (VT_VALMASK | VT_LVAL)) == VT_CONST){
-        gen_ldr_reg(TREG_ST0);
+        gen_load_reg(TREG_ST0);
     }
 
     /* must put at least one value in the floating point register */
     if ((vtop[-1].r & VT_LVAL) &&
         (vtop[0].r & VT_LVAL)) {
         vswap();
-        gen_ldr_reg(TREG_ST0);
+        gen_load_reg(TREG_ST0);
         vswap();
     }
     swapped = 0;
@@ -907,7 +906,7 @@ ST_FUNC void gen_cvt_itof(int t)
     if (vtop->type.t==VT_INT64) {
         /* signed long long to float/double/long double (unsigned case
            is handled generically) */
-        o(0x50 + vtop->c.r2); /* push r2 */
+        o(0x50 + vtop->r2); /* push r2 */
         o(0x50 + (vtop->r & VT_VALMASK)); /* push r */
         o(0x242cdf); /* fildll (%esp) */
         o(0x08c483); /* add $8, %esp */
@@ -927,7 +926,7 @@ ST_FUNC void gen_cvt_itof(int t)
         tcc_error(TCC_ERROR_UNIMPLEMENTED);
     }
     vtop->r=TREG_ST0;
-    vtop->c.r2=VT_CONST;
+    vtop->r2=VT_CONST;
 }
 
 ST_FUNC void gen_cvt_ftoi(int type){
@@ -986,7 +985,7 @@ ST_FUNC void gen_cvt_ftoi(int type){
     }
 
     vswap();
-    gen_ldr_reg(TREG_ST0);
+    gen_load_reg(TREG_ST0);
 
     switch(type){
         case VT_INT8:

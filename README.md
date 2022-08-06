@@ -11,16 +11,20 @@ So the APIs are seemed like tinycc. But there are some differents.
 
 3. extract a little part of tccelf. library will only support a simple subset of elf format.
 
-Now this project is incomplete. the arm and i386 backend can be used but have not been completely tested.
+Now this project is incomplete. the arm and i386 backend can be used but have not been completely tested, and float-integer conversions are almost broken.
 
-**the arm64 and x86_64 backend have not been ported.**
+**the arm64 backend have not been ported.**
 
 
 # TODO:
 
-Port x86_64 and arm64 backend.
+Port arm64 backend.
 
 More test.
+
+Float-integer conversions
+
+Eliminate compile warning
 
 
 # How to use

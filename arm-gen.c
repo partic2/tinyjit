@@ -61,6 +61,8 @@ struct s_abi_config abi_config;
 
 
 ST_FUNC void arch_gen_init() {
+  abi_config.float_abi=ARM_SOFT_FLOAT;
+  abi_config.eabi=1;
 }
 
 ST_FUNC void arch_gen_deinit() {
@@ -251,6 +253,7 @@ static uint32_t intr(int r) {
   if (r >= TREG_R0 && r <= TREG_LR)
     return r - TREG_R0;
   tcc_error("compiler error! register is no int register");
+  return 0;
 }
 
 static void calcaddr(uint32_t *base, int *off, int *sgn, int maxoff,
@@ -650,14 +653,16 @@ struct param_plan {
 struct plan {
   struct param_plan *pplans;               /* array of all the param plans */
   struct param_plan *clsplans[NB_CLASSES]; /* per class lists of param plans */
+  int nb_plans;
 };
 
-#define add_param_plan(plan, pplan, class)                                     \
-  do {                                                                         \
-    pplan.prev = plan->clsplans[class];                                        \
-    plan->pplans[plan##_nb] = pplan;                                           \
-    plan->clsplans[class] = &plan->pplans[plan##_nb++];                        \
-  } while (0)
+static void add_param_plan(struct plan* plan, int cls, int start, int end, SValue *v)
+{
+    struct param_plan *p = &plan->pplans[plan->nb_plans++];
+    p->prev = plan->clsplans[cls];
+    plan->clsplans[cls] = p;
+    p->start = start, p->end = end, p->sval = v;
+}
 
 /* Assign parameters to registers and stack with alignment according to the
    rules in the procedure call standard for the ARM architecture (AAPCS).
@@ -672,57 +677,50 @@ struct plan {
    todo: a bitmap that record which core registers hold a parameter
 
    Returns the amount of stack space needed for parameter passing
-
-   Note: this function allocated an array in plan->pplans with tcc_malloc. It
-   is the responsibility of the caller to free this array once used (ie not
-   before copy_params). */
-static int assign_regs(int nb_args, int float_abi, struct plan *plan,
-                       int *todo) {
-  int i, size, align;
-  int ncrn /* next core register number */,
-      nsaa /* next stacked argument address*/;
-  int plan_nb = 0;
-  struct param_plan pplan;
-  struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
+*/
+static int assign_regs(int nb_args, int float_abi, struct plan *plan, int *todo)
+{
+  int i, size;
+  uint32_t align;
+  int ncrn /* next core register number */, nsaa /* next stacked argument address*/;
+  struct avail_regs avregs = {{0}};
 
   ncrn = nsaa = 0;
   *todo = 0;
-  plan->pplans = tcc_malloc(nb_args * sizeof(*plan->pplans));
-  memset(plan->clsplans, 0, sizeof(plan->clsplans));
-  for (i = nb_args; i--;) {
+
+  for(i = nb_args; i-- ;) {
     int j, start_vfpreg = 0;
     CType type = vtop[-i].type;
     size = size_align_of_type(type.t, &align);
     size = (size + 3) & ~3;
     align = (align + 3) & ~3;
-    switch (vtop[-i].type.t & VT_TYPE) {
-    case VT_FLOAT32:
-    case VT_FLOAT64:
+    switch(vtop[-i].type.t & VT_TYPE) {
+      case VT_FLOAT32:
+      case VT_FLOAT64:
       if (float_abi == ARM_HARD_FLOAT) {
 
-        if (is_float(vtop[-i].type.t)){
+        if (is_float(vtop[-i].type.t)) {
           int end_vfpreg;
 
           start_vfpreg = assign_vfpreg(&avregs, align, size);
           end_vfpreg = start_vfpreg + ((size - 1) >> 2);
           if (start_vfpreg >= 0) {
-            pplan = (struct param_plan){start_vfpreg, end_vfpreg, &vtop[-i]};
-            add_param_plan(plan, pplan, VFP_CLASS);
+            add_param_plan(plan, VFP_CLASS,
+                start_vfpreg, end_vfpreg, &vtop[-i]);
             continue;
           } else
             break;
         }
       }
-      ncrn = (ncrn + (align - 1) / 4) & ~((align / 4) - 1);
-      if (ncrn + size / 4 <= 4 || (ncrn < 4 && start_vfpreg != -1)) {
+      ncrn = (ncrn + (align-1)/4) & ~((align/4) - 1);
+      if (ncrn + size/4 <= 4 || (ncrn < 4 && start_vfpreg != -1)) {
         /* The parameter is allocated both in core register and on stack. As
-         * such, it can be of either class: it would either be the last of
-         * CORE_STRUCT_CLASS or the first of STACK_CLASS. */
+	 * such, it can be of either class: it would either be the last of
+	 * CORE_STRUCT_CLASS or the first of STACK_CLASS. */
         for (j = ncrn; j < 4 && j < ncrn + size / 4; j++)
-          *todo |= (1 << j);
-        pplan = (struct param_plan){ncrn, j, &vtop[-i]};
-        add_param_plan(plan, pplan, CORE_STRUCT_CLASS);
-        ncrn += size / 4;
+          *todo|=(1<<j);
+        add_param_plan(plan, CORE_STRUCT_CLASS, ncrn, j, &vtop[-i]);
+        ncrn += size/4;
         if (ncrn > 4)
           nsaa = (ncrn - 4) * 4;
       } else {
@@ -730,32 +728,27 @@ static int assign_regs(int nb_args, int float_abi, struct plan *plan,
         break;
       }
       continue;
-    default:
+      default:
       if (ncrn < 4) {
-        int is_long = is_same_size_int(vtop[-i].type.t ,VT_INT64);
+        int is_long = is_same_size_int(vtop[-i].type.t & VT_TYPE, VT_INT64);
 
         if (is_long) {
           ncrn = (ncrn + 1) & -2;
           if (ncrn == 4)
             break;
         }
-        pplan = (struct param_plan){ncrn, ncrn, &vtop[-i]};
-        ncrn++;
-        if (is_long)
-          pplan.end = ncrn++;
-        add_param_plan(plan, pplan, CORE_CLASS);
+        add_param_plan(plan, CORE_CLASS, ncrn, ncrn + is_long, &vtop[-i]);
+        ncrn += 1 + is_long;
         continue;
       }
     }
     nsaa = (nsaa + (align - 1)) & ~(align - 1);
-    pplan = (struct param_plan){nsaa, nsaa + size, &vtop[-i]};
-    add_param_plan(plan, pplan, STACK_CLASS);
+    add_param_plan(plan, STACK_CLASS, nsaa, nsaa + size, &vtop[-i]);
     nsaa += size; /* size already rounded up before */
   }
   return nsaa;
 }
 
-#undef add_param_plan
 
 /* Copy parameters to their final destination (core reg, VFP reg or stack) for
    function call.
@@ -793,7 +786,7 @@ again:
         continue;
 
       vpushv(pplan->sval);
-      pplan->sval->r = pplan->sval->c.r2 = VT_CONST; /* disable entry */
+      pplan->sval->r = pplan->sval->r2 = VT_CONST; /* disable entry */
       switch (i) {
       case STACK_CLASS:
       case CORE_STRUCT_CLASS:
@@ -828,7 +821,7 @@ again:
         break;
 
       case VFP_CLASS:
-        gen_ldr_reg(TREG_F0 + (pplan->start >> 1));
+        gen_load_reg(TREG_F0 + (pplan->start >> 1));
         if (pplan->start & 1) { /* Must be in upper part of double register */
           o(0xEEF00A40 | ((pplan->start >> 1) << 12) |
             (pplan->start >> 1)); /* vmov.f32 s(n+1), sn */
@@ -839,11 +832,11 @@ again:
       case CORE_CLASS:
         if ((pplan->sval->type.t & VT_TYPE) == VT_INT64) {
           gen_lexpand();
-          gen_ldr_reg(pplan->end);
-          pplan->sval->c.r2 = vtop->r;
+          gen_load_reg(pplan->end);
+          pplan->sval->r2 = vtop->r;
           vtop--;
         }
-        gen_ldr_reg(pplan->start);
+        gen_load_reg(pplan->start);
         /* Mark register as used so that gcall_or_jmp use another one
              (regs >=4 are free as never used to pass parameters) */
         pplan->sval->r = vtop->r;
@@ -887,11 +880,11 @@ again:
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
 ST_FUNC void gfunc_call(int nb_args,CType *ret_type) {
-  int r, args_size,align;
+  int r, args_size,btype;
+  uint32_t align;
   int def_float_abi = abi_config.float_abi;
   int todo;
   struct plan plan;
-
 
   /* cannot let cpu flags if other instruction are generated. Also avoid leaving
      VT_JMP anywhere except on the top of the stack because it would complicate
@@ -900,14 +893,22 @@ ST_FUNC void gfunc_call(int nb_args,CType *ret_type) {
   if (r == VT_CMP || (r & ~1) == VT_JMP)
     gen_ldr();
 
+  memset(&plan, 0, sizeof plan);
+  if (nb_args)
+    plan.pplans = tcc_malloc(nb_args * sizeof(*plan.pplans));
+
   args_size = assign_regs(nb_args, abi_config.float_abi, &plan, &todo);
 
-#ifdef TCC_ARM_EABI
+
   if (args_size & 7) { /* Stack must be 8 byte aligned at fct call for EABI */
     args_size = (args_size + 7) & ~7;
     o(0xE24DD004); /* sub sp, sp, #4 */
   }
-#endif
+
+  if (abi_config.eabi && (args_size & 7)) { /* Stack must be 8 byte aligned at fct call for EABI */
+    args_size = (args_size + 7) & ~7;
+    o(0xE24DD004); /* sub sp, sp, #4 */
+  }
 
   nb_args += copy_params(nb_args, &plan, todo);
   tcc_free(plan.pplans);
@@ -916,178 +917,182 @@ ST_FUNC void gfunc_call(int nb_args,CType *ret_type) {
   vrotb(nb_args + 1);
   gcall_or_jmp(0);
   if (args_size)
-    gadd_sp(args_size); /* pop all parameters passed on the stack */
-#if defined(TCC_ARM_EABI)
-  if (abi_config.float_abi == ARM_SOFTFP_FLOAT && is_float(ret_type->t)) {
-    if ((ret_type->t & VT_TYPE) == VT_FLOAT32) {
-      o(0xEE000A10); /*vmov s0, r0 */
-    } else {
-      o(0xEE000B10); /* vmov.32 d0[0], r0 */
-      o(0xEE201B10); /* vmov.32 d0[1], r1 */
+      gadd_sp(args_size); /* pop all parameters passed on the stack */
+  if(abi_config.eabi){
+    if(abi_config.float_abi == ARM_SOFTFP_FLOAT && is_float(ret_type->t)) {
+      if((ret_type->t & VT_TYPE) == VT_FLOAT32) {
+        o(0xEE000A10); /*vmov s0, r0 */
+      } else {
+        o(0xEE000B10); /* vmov.32 d0[0], r0 */
+        o(0xEE201B10); /* vmov.32 d0[1], r1 */
+      }
     }
   }
-#endif
-  vpop(nb_args + 1);
-  if(ret_type->t!=VT_VOID){
-    vpush(ret_type);
-    if(size_align_of_type(ret_type->t,&align)<=4){
-      vtop->r=TREG_R0;
-      vtop->c.r2=VT_CONST;
-    }else if(is_same_size_int(ret_type->t,VT_INT64)){
-      vtop->r=TREG_R0;
-      vtop->c.r2=TREG_R1;
-    }else if(ret_type->t==VT_FLOAT32 || ret_type->t==VT_FLOAT64){
-      vtop->r=TREG_F0;
-      vtop->c.r2=VT_CONST;
-    }
-  }
+  vpop(nb_args + 1); /* Pop all params and fct address from value stack */
   leaffunc = 0; /* we are calling a function, so we aren't in a leaf function */
   abi_config.float_abi = def_float_abi;
+
+  vpushi(0);
+  vtop->type=*ret_type;
+  btype=ret_type->t;
+  if(is_integer(btype)&&size_align_of_type(btype,&align)<=4){
+      vtop->r=TREG_R0;
+      vtop->r2=VT_CONST;
+  }else if(is_same_size_int(btype,VT_INT64)){
+      vtop->r=TREG_R0;
+      vtop->r=TREG_R1;
+  }else if(btype==VT_FLOAT32 || btype==VT_FLOAT64){
+      vtop->r=TREG_F0;
+      vtop->r2=VT_CONST;
+  }else{
+      tcc_error("unsuport value type.");
+  }
 }
 
 /* generate function prolog of type 't' */
-void gfunc_prolog(CType *ret_type) {
-
+void gfunc_prolog(Sym *func_sym)
+{
+  CType *func_type = &func_sym->type;
   SValue *sv;
-  int todo,i,nb_args;
-  struct plan plan;
-  struct param_plan *pplan;
+  int n, nf, size, rs, struct_ret = 0;
+  uint32_t align;
+  int addr, pn, sn; /* pn=core, sn=stack */
+  CType ret_type;
 
-  nb_args=vtop-__vstack;
-#ifdef TCC_ARM_EABI
-  struct avail_regs avregs = AVAIL_REGS_INITIALIZER;
-#endif
+  struct avail_regs avregs = {{0}};
 
-  assign_regs(nb_args,abi_config.float_abi,&plan,&todo);
-  for(i=0;i<NB_CLASSES;i++){
-    for (pplan = plan.clsplans[i]; pplan; pplan = pplan->prev) {
-      switch(i){
-        case CORE_CLASS:
-        case CORE_STRUCT_CLASS:
-        pplan->sval->r=pplan->start;
-        if(pplan->end-pplan->start==2){
-          pplan->sval->c.r2=pplan->end;
-        }
-        break;
-        case VFP_CLASS:
-        case VFP_STRUCT_CLASS:
-        pplan->sval->r=pplan->start+TREG_F0;
-        if(pplan->end-pplan->end==2){
-          pplan->sval->c.r2=pplan->end+TREG_F0;
-        }
-        break;
-        case STACK_CLASS:
-        pplan->sval->r=VT_LOCAL|VT_LVAL;
-        pplan->sval->c.i=pplan->start+1;
-        break;
-      }
+  n = nf = 0;
+
+  for(sv=vstack; sv<=vtop && (n < 4 || nf < 16); sv++) {
+    size = size_align_of_type(sv->type.t, &align);
+    if (abi_config.eabi && abi_config.float_abi == ARM_HARD_FLOAT  &&
+        is_float(sv->type.t) ) {
+      int tmpnf = assign_vfpreg(&avregs, align, size);
+      tmpnf += (size + 3) / 4;
+      nf = (tmpnf > nf) ? tmpnf : nf;
+    } else{
+      if (n < 4)
+        n += (size + 3) / 4;
     }
+    
   }
-
-  
-  o(0xe92d4800); /* push {fp, lr} */
-  
-  o(0xe28db000); /* add fp, sp, #0 */
-
+  o(0xE1A0C00D); /* mov ip,sp */
+  if (n) {
+    if(n>4)
+      n=4;
+  if(abi_config.eabi) n=(n+1)&-2;
+    o(0xE92D0000|((1<<n)-1)); /* save r0-r4 on stack if needed */
+  }
+  if (nf) {
+    if (nf>16)
+      nf=16;
+    nf=(nf+1)&-2; /* nf => HARDFLOAT => EABI */
+    o(0xED2D0A00|nf); /* save s0-s15 on stack if needed */
+  }
+  o(0xE92D5800); /* save fp, ip, lr */
+  o(0xE1A0B00D); /* mov fp, sp */
   func_sub_sp_offset = ind;
   o(0xE1A00000); /* nop, leave space for stack adjustment in epilog */
 
-  vpushi(8);
-  vtop->r=VT_LOCAL;
+  if (abi_config.eabi && abi_config.float_abi == ARM_HARD_FLOAT) {
+    memset(&avregs, 0, sizeof avregs);
+  }
+  
+  pn = struct_ret, sn = 0;
+  for(sv=vstack; sv<=vtop ; sv++) {
+    CType *type;
+    type = &sv->type;
+    size = size_align_of_type(type->t, &align);
+    size = (size + 3) >> 2;
+    align = (align + 3) & ~3;
+    if (abi_config.eabi && abi_config.float_abi == ARM_HARD_FLOAT  && is_float(sv->type.t)) {
+      int fpn = assign_vfpreg(&avregs, align, size << 2);
+      if (fpn >= 0)
+        addr = fpn * 4;
+      else
+        goto from_stack;
+    } else if (pn < 4) {
+      if(abi_config.eabi)pn = (pn + (align-1)/4) & -(align/4);
+      addr = (nf + pn) * 4;
+      pn += size;
+      if (!sn && pn > 4)
+        sn = (pn - 4);
+    } else {
 
-  vpushi(4);
-  vtop->r=VT_LOCAL|VT_LVAL;
-
-  for(i=0;i<NB_REGS;i++){
-    if(get_reg_attr(i)->c&RC_CALLEE_SAVED){
-      get_reg_attr(i)->s=RS_LOCKED;
-    }else{
-      get_reg_attr(i)->s=0;
+from_stack:
+      if(abi_config.eabi)sn = (sn + (align-1)/4) & -(align/4);
+      addr = (n + nf + sn) * 4;
+      sn += size;
     }
+    sv->r= VT_LOCAL | VT_LVAL;
+    sv->c.i = addr+12;
   }
   last_itod_magic=0;
+  leaffunc = 1;
   loc = 0;
+
+  vpushi(0);
+  vtop->r=TREG_LR;
+  vtop->r2=VT_CONST;
 }
 
 
+
 /* generate function epilog */
-ST_FUNC void gfunc_epilog(){
-  uint32_t x,r,size;
-  int diff;
+void gfunc_epilog(void)
+{
+  uint32_t x;
+  int diff,btype;
+  uint32_t align;
+  int rettype=vtop->type.t;
 
-  switch(vtop->type.t&VT_TYPE){
-    case VT_INT64:
-    case VT_INT64|VT_UNSIGNED:
-
-    gen_lexpand();
-    gen_ldr_reg(TREG_R1);
-    vswap();
-    
-    gen_ldr_reg(TREG_R0);
-    
-    vpop(2);
-    break;
-    case VT_FLOAT32:
-    case VT_FLOAT64:
-    #if defined(TCC_ARM_EABI)
-    /* Copy float return value to core register if base standard is used and
-     float computation is made with VFP */
-    if (abi_config.float_abi == ARM_SOFTFP_FLOAT) {
-
-          r = vfpr(gen_ldr()) << 12;
-          if ((vtop->type.t & VT_TYPE) == VT_FLOAT64){
-            r |= 0x101; /* vpush.32 -> vpush.64 */
-            size=8;
-          }else{
-            size=4;
-          }
-          o(0xED2D0A01 + r); /* vpush */
-      if(size==4){
-        o(0xe49d0004); /* pop {r0} */
-      }else{
-        o(0xe8bd0003); /* pop {r0,r1} */
-      }
-    }else{
-      load(TREG_F0,vtop);
+  if(size_align_of_type(btype,&align)<=4){
+        load(TREG_R0,vtop);
+    }else if((btype==VT_INT64) || (btype==(VT_INT64|VT_UNSIGNED))){
+        gen_lexpand();
+        gen_load_reg(TREG_R0);
+        vswap();
+        gen_load_reg(TREG_R1);
+        vpop(1);
+    }else if((btype==VT_FLOAT32) || (btype==VT_FLOAT64)){
+        load(TREG_F0,vtop);
+    }else if(btype==VT_VOID){
+        /* do nothing */
     }
-    #endif
-    load(TREG_F0,vtop);
     vpop(1);
-    break;
-    case VT_VOID:
-    vpop(1);
-    break;
-    default:
-    load(TREG_R0,vtop);
-    vpop(1);
-    break;
+  /* Copy float return value to core register if base standard is used and
+     float computation is made with VFP */
+  if (abi_config.eabi && (abi_config.float_abi == ARM_SOFTFP_FLOAT) && is_float(rettype)) {
+    if((rettype & VT_TYPE) == VT_FLOAT32)
+      o(0xEE100A10); /* fmrs r0, s0 */
+    else {
+      o(0xEE100B10); /* fmrdl r0, d0 */
+      o(0xEE301B10); /* fmrdh r1, d0 */
+    }
   }
-
-
-  o(0xe1a0d00b); /* mov sp, fp */
-  o(0xe8bd8800); /* pop {fp, pc} */
+  o(0xE89BA800); /* restore fp, sp, pc */
   diff = (-loc + 3) & -4;
-#ifdef TCC_ARM_EABI
-  if (!leaffunc)
+
+  if(abi_config.eabi && !leaffunc)
     diff = ((diff + 11) & -8) - 4;
-#endif
-  if (diff > 0) {
-    x = stuff_const(0xE24BD000, diff); /* sub sp,fp,# */
-    if (x)
+
+  if(diff > 0) {
+    x=stuff_const(0xE24BD000, diff); /* sub sp,fp,# */
+    if(x)
       *(uint32_t *)(cur_text_section()->data + func_sub_sp_offset) = x;
     else {
       int addr;
-      addr = ind;
+      addr=ind;
       o(0xE59FC004); /* ldr ip,[pc+4] */
       o(0xE04BD00C); /* sub sp,fp,ip  */
       o(0xE1A0F00E); /* mov pc,lr */
       o(diff);
-      *(uint32_t *)(cur_text_section()->data + func_sub_sp_offset) =
-          0xE1000000 | encbranch(func_sub_sp_offset, addr, 1);
+      *(uint32_t *)(cur_text_section()->data + func_sub_sp_offset) = 0xE1000000|encbranch(func_sub_sp_offset,addr,1);
     }
   }
-  vpop(vtop-__vstack);
+  vpop(1);
 }
+
 
 ST_FUNC void gen_fill_nops(int bytes) {
   if ((bytes & 3))
@@ -1223,7 +1228,7 @@ void gen_opi(int op) {
     gen_ldr();
     vswap();
     gen_ldr();
-    r = intr(vtop[-1].c.r2 = vtop->r);
+    r = intr(vtop[-1].r2 = vtop->r);
     c = vtop[-1].r;
     vpop(1);
     o(0xE0800090 | (r << 16) | (intr(vtop->r) << 12) | (intr(c) << 8) | intr(r));

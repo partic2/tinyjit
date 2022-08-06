@@ -1205,6 +1205,7 @@ ST_FUNC addr_t get_elf_sym_addr(const char *name, int err) {
   ElfW(Sym) * sym;
 
   sym_index = find_elf_sym(symtab, name);
+
   sym = &((ElfW(Sym) *)symtab->data)[sym_index];
   if (!sym_index || sym->st_shndx == SHN_UNDEF) {
     if (err)

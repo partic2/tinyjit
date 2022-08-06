@@ -25,7 +25,6 @@ typedef union CValue {
     double d;
     float f;
     uint64_t i;
-    uint8_t r2; /* the second register to store multi-word SValue. should be VT_CONST if not used*/
 } CValue;
 
 /* value on vstack 
@@ -33,13 +32,15 @@ DO NOT use same register to store different multi-word SValue */
 typedef struct SValue {
     CType type;      /* type */
     uint16_t r;      /* register + flags */
+    uint16_t r2;      /* the second register to store multi-word SValue. should be VT_CONST if not used*/
     CValue c;              /* constant, if VT_CONST */
 	struct Sym *sym;
 } SValue;
 
-extern SValue *__vstack;
 extern SValue *vtop;
-extern SValue *pvtop;
+
+extern SValue *__vstack;
+#define vstack (__vstack+1)
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
@@ -126,7 +127,7 @@ struct reg_attr{
 extern uint32_t ind, loc;
 
 ST_FUNC uint32_t get_VT_INT_TYPE_of_size(unsigned int size);
-ST_FUNC unsigned int size_align_of_type(uint32_t type,unsigned int *align);
+ST_FUNC unsigned int size_align_of_type(uint32_t type,uint32_t *align);
 ST_FUNC void vpush(CType *type);
 ST_FUNC void vpop(int n);
 ST_FUNC void vpushi(int v);
@@ -153,7 +154,7 @@ ST_FUNC int get_reg_of_cls(int rc);
 /*load vtop into register, return vtop->r if successed */
 ST_FUNC int gen_ldr();
 /*load vtop into r.*/
-ST_FUNC void gen_ldr_reg(int r);
+ST_FUNC void gen_load_reg(int r);
 /* get c.i for a temperory local variable */
 ST_FUNC int get_temp_local_var(int size,int align);
 /* clear all temperory local variables record */
@@ -164,8 +165,8 @@ ST_FUNC void gen_addr_of();
 ST_FUNC void gen_lval_of();
 ST_FUNC int is_lval();
 
-/* move lvalue */
-ST_FUNC int gen_lval_offset(int offset);
+/* move pointer */
+ST_FUNC void gen_lval_offset(int offset);
 
 /* expand vtop into 2 SValues 
     before calling:
@@ -214,14 +215,18 @@ ST_FUNC void gfunc_call(int nb_args,CType *ret_type);
 	vtop:the last argument
 	vtop-1:the next to last argument
 	...
-	vtop-nb_args (__vstack):the first argument
+	vtop-nb_args (vstack):the first argument
 	
+    only type in SValue are used by gfunc_prog
+
 	after calling:
 	vtop:addr of next instruction(to return caller) 
 	vtop-1:start addr of extend(stack) args.
 	vtop-2:the last argument
 	vtop-3:the next to last argument
 	...
+
+    after calling, argument SValue will be filled with real value (r,r2 ,etc.).
 */
 ST_FUNC void gfunc_prolog();
 
@@ -235,6 +240,7 @@ ST_FUNC void gfunc_prolog();
 
 	after calling:
 	vtop-2 to vtop will be poped.
+    argument SValue still keep in stack.
 */
 ST_FUNC void gfunc_epilog();
 

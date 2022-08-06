@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 
+
 #include "tcc-platform.h"
 
 static int testGenObjectFile(){
@@ -25,25 +26,25 @@ static int testGenObjectFile(){
     s.c=0;
     put_extern_sym(&s,cur_text_section(),ind,0);
 
+    vpushi(0);
+    vtop->type.t=VT_INT32;
+    vpushi(0);
+    vtop->type.t=VT_INT32;
+
     gfunc_prolog();
     
+    vpushv(vtop-1);
+    vpushv(vtop-3);
+    gen_opi(TOK_ADD);
 
-    vpushl(VT_INT16,16);
-    vtop->r=VT_LVAL|VT_LOCAL;
-    vpushl(VT_INT32,20);
-    vtop->r=VT_LVAL|VT_LOCAL;
-    gen_opi(TOK_UMULL);
+    r=gen_ldr();
 
     vpop(1);
 
     loc=alloc_local(8,8);
-    vpushl(VT_INT64,loc);
-    vtop->r=VT_LOCAL;
-    r=get_reg_of_cls(RC_INT);
-    load(r,vtop);
-    vtop->r=r;
-    vtop->c.r2=VT_CONST;
-    vtop->r|=VT_LVAL;
+    vpushi(loc);
+    vtop->r=VT_LVAL|VT_LOCAL;
+    store(r,vtop);
 
     gfunc_epilog();
     xxx_gen_deinit();
@@ -60,6 +61,8 @@ static int testLoadAndMergeObjectFile(){
     FILE *f,*f2;
     Sym s;
 
+    CType ct;
+    ct.t=VT_INT32;
     
     tccelf_new();
     xxx_gen_init();
@@ -71,12 +74,22 @@ static int testLoadAndMergeObjectFile(){
     s.c=0;
     put_extern_sym(&s,cur_text_section(),ind,0);
 
+    Sym myfunc;
+    myfunc.name="myfunc";
+    myfunc.type.t=VT_FUNC;
+    myfunc.c=0;
+    myfunc.a.aligned=0;
+    myfunc.a.scope=SYM_SCOPE_GLOBAL;
+
+
     gfunc_prolog();
     
-    vpushl(VT_INT32,16);
-    vpushl(VT_INT32,20);
-    gen_opi(TOK_UMULL);
-
+    vpushi(0);
+    printf(" (vtop->c.i-4) == (int)(vtop->c.i-4):%d\n",(vtop->c.i-4) == (int)(vtop->c.i-4));
+    vtop->sym=&myfunc;
+    vpushi(16);
+    vpushi(20);
+    gfunc_call(2,&ct);
 
     gfunc_epilog();
     xxx_gen_deinit();
@@ -98,15 +111,25 @@ static int testRunInMemory(){
     void *ptr;
     FILE *f;
     int i;
-    long long (*myfunc2)();
+    int (*myfunc2)();
+    uint32_t *ptr2;
     printf("testRunInMemory\n");
-    ptr=tcc_alloc_executable_memory(0x800);
+    ptr=tcc_alloc_executable_memory(64*1024);
+    printf("alloc executable memory:%d\n",(int32_t)ptr);
+    if((int32_t)ptr==NULL){
+        printf("error:%s\n",tcc_last_error());
+        return 0;
+    }
+    fflush(stdout);
     tccelf_new();
     f=fopen("myobj2.o","rb+");
     tcc_load_object_file(f,0);
     tcc_relocate(ptr,0);
     myfunc2=tcc_get_symbol("myfunc2");
-    printf("myfunc2 return %lld\n",myfunc2());
+    printf("get myfunc2:%d\n",&myfunc2);
+    ptr2=(void *)myfunc2;
+    printf("myfunc2 header:%d\n",*ptr2);
+    printf("myfunc2 return %d\n",myfunc2());
     tccelf_delete();
     tcc_free_executable_memory(ptr,0x800);
     printf("done\n");
