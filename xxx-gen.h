@@ -25,6 +25,7 @@ typedef union CValue {
     double d;
     float f;
     uint64_t i;
+    struct { unsigned short cmp_op, cmp_r; };
 } CValue;
 
 /* value on vstack 
@@ -42,9 +43,8 @@ extern SValue *vtop;
 extern SValue *__vstack;
 #define vstack (__vstack+1)
 
-/* a register can belong to several classes. The classes must be
-   sorted from more general to more precise (see gv2() code which does
-   assumptions on it). */
+/* a register can belong to several classes. */
+#define RC_ANY     0xFFFF /* any register class */
 #define RC_INT     0x0001 /* generic integer register */
 #define RC_FLOAT   0x0002 /* generic float register */
 

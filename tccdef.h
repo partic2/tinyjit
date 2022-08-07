@@ -56,6 +56,10 @@ typedef uint32_t FLAG_GROUP;
 #include "x86_64-gen.h"
 #endif
 
+#ifdef TCC_TARGET_ARM64
+#include "arm64-gen.h"
+#endif
+
 #if PTR_SIZE == 8
 # define ELFCLASSW ELFCLASS64
 # define ElfW(type) Elf##64##_##type

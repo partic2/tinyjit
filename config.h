@@ -4,10 +4,13 @@
 //#define TCC_TARGET_I386
 
 //include arm-gen,arm-link
-#define TCC_TARGET_ARM
+//#define TCC_TARGET_ARM
 
 //include x86_64-gen,x86_64-link
 //#define TCC_TARGET_X86_64
+
+//include x86_64-gen,x86_64-link
+//#define TCC_TARGET_ARM64
 
 
 /*-------------abi---------------*/
@@ -17,4 +20,4 @@
 
 /*-------------host---------------*/
 //If host is in the same as target.
-//#define TCC_IS_NATIVE
+#define TCC_IS_NATIVE

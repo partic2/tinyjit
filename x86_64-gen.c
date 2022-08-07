@@ -604,10 +604,10 @@ void gfunc_prolog() {
           gen_modrm(reg_param_index, VT_LOCAL, NULL, addr);
         } else {
           gen_modrm64(0x89, arg_regs[reg_param_index], VT_LOCAL, NULL, addr);
-        }
-        sv->r = VT_LOCAL | VT_LVAL;
-        sv->c.i = addr;
+        }  
       }
+      sv->r = VT_LOCAL | VT_LVAL;
+      sv->c.i = addr;
     }
     addr += 8;
     reg_param_index++;
@@ -1249,6 +1249,7 @@ void gen_opi(int op) {
         oad(0xc0 | (opc << 3) | REG_VALUE(r), c);
       }
     } else {
+      vswap();
       gen_ldr();
       vswap();
       gen_ldr();

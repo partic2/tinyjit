@@ -520,3 +520,8 @@ ST_FUNC void xxx_gen_deinit(){
 #include "x86_64-gen.c"
 #include "x86_64-link.c"
 #endif
+
+#ifdef TCC_TARGET_ARM64
+#include "arm64-gen.c"
+#include "arm64-link.c"
+#endif
