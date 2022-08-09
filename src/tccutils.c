@@ -1,4 +1,8 @@
+
+#if !TCC_IMPORT_BY_INCLUDE_ALL
 #include "tccutils.h"
+#endif
+
 #include "tccdef.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,3 +47,11 @@ ST_FUNC void tcc_error(char *message){
 ST_FUNC char *tcc_last_error(){
     return error_message;
 }
+
+
+#if TCC_IMPORT_BY_INCLUDE_ALL
+#include "tcc-platform.c"
+#include "xxx-gen.c"
+#include "tccelf.c"
+#endif
+

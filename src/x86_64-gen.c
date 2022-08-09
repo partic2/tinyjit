@@ -140,7 +140,7 @@ ST_FUNC void gsym_addr(int t, int a) {
   }
 }
 
-void gsym(int t) { gsym_addr(t, ind); }
+ST_FUNC void gsym(int t) { gsym_addr(t, ind); }
 
 static int is64_type(int t) {
   int align;
@@ -226,7 +226,7 @@ static void gen_modrm64(int opcode, int op_reg, int r, Sym *sym, int c) {
 }
 
 /* load 'r' from value 'sv' */
-void load(int r, SValue *sv) {
+ST_FUNC void load(int r, SValue *sv) {
   int v, t, ft, fc, fr;
   SValue v1;
 
@@ -365,7 +365,7 @@ void load(int r, SValue *sv) {
 }
 
 /* store register 'r' in lvalue 'v' */
-void store(int r, SValue *v) {
+ST_FUNC void store(int r, SValue *v) {
   int fr, bt, ft, fc;
   int op64 = 0;
   /* store the REX prefix in this variable when PIC is enabled */
@@ -481,7 +481,7 @@ static int gfunc_arg_size(CType *type) {
   return size_align_of_type(type->t, NULL);
 }
 
-void gfunc_call(int nb_args, CType *ret_type) {
+ST_FUNC void gfunc_call(int nb_args, CType *ret_type) {
   int size, r, args_size, i, d, bt, struct_size;
   int arg;
   uint32_t align;
@@ -570,7 +570,7 @@ void gfunc_call(int nb_args, CType *ret_type) {
 #define FUNC_PROLOG_SIZE 11
 
 /* generate function prolog of type 't' */
-void gfunc_prolog() {
+ST_FUNC void gfunc_prolog() {
   int addr, reg_param_index, bt, size;
   SValue *sv;
   CType *type;
@@ -622,7 +622,7 @@ void gfunc_prolog() {
 }
 
 /* generate function epilog */
-void gfunc_epilog(void) {
+ST_FUNC void gfunc_epilog(void) {
   int v, saved_ind;
   int btype;
   uint32_t align;
@@ -815,7 +815,7 @@ static int arg_prepare_reg(int idx) {
 /* Generate function call. The function address is pushed first, then
    all the parameters in call order. This functions pops all the
    parameters and the function address. */
-void gfunc_call(int nb_args,CType *ret_type) {
+ST_FUNC void gfunc_call(int nb_args,CType *ret_type) {
   X86_64_Mode mode;
   CType type;
   int size, r, args_size, stack_adjust, i, reg_count, k;
@@ -1019,8 +1019,7 @@ static void push_arg_reg(int i) {
 }
 
 /* generate function prolog of type 't' */
-void gfunc_prolog(Sym *func_sym) {
-  CType *func_type = &func_sym->type;
+ST_FUNC void gfunc_prolog() {
   X86_64_Mode mode;
   int i, addr, align, size, reg_count;
   int param_addr = 0, reg_param_index, sse_param_index;
@@ -1093,7 +1092,7 @@ void gfunc_prolog(Sym *func_sym) {
 }
 
 /* generate function epilog */
-void gfunc_epilog(void) {
+ST_FUNC void gfunc_epilog(void) {
   int v, saved_ind,btype;
   uint32_t align;
 
@@ -1220,7 +1219,7 @@ ST_FUNC int gtst(int inv, int t) {
 }
 
 /* generate an integer binary operation */
-void gen_opi(int op) {
+ST_FUNC void gen_opi(int op) {
   int r, fr, opc, c;
   int ll, uu, cc;
 
@@ -1364,7 +1363,7 @@ void gen_opi(int op) {
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranteed to have the same floating point type */
 /* XXX: need to use ST1 too */
-void gen_opf(int op) {
+ST_FUNC void gen_opf(int op) {
   int a, ft, fc, swapped, r;
   int float_type_r =
       (vtop->type.t & VT_TYPE) == VT_FLOAT128 ? TREG_ST0 : VT_CONST;
@@ -1568,7 +1567,7 @@ void gen_opf(int op) {
 
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
    and 'long long' cases. */
-void gen_cvt_itof(int t) {
+ST_FUNC void gen_cvt_itof(int t) {
   if ((t & VT_TYPE) == VT_FLOAT128) {
     save_reg_upstack(TREG_ST0, 0);
     gen_ldr();
@@ -1607,7 +1606,7 @@ void gen_cvt_itof(int t) {
 }
 
 /* computed goto support */
-void ggoto(void) {
+ST_FUNC void ggoto(void) {
   gcall_or_jmp(1);
   vtop--;
 }

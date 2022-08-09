@@ -3,7 +3,7 @@
 
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
    relocations, returns -1. */
-int code_reloc (int reloc_type)
+ST_FUNC int code_reloc (int reloc_type)
 {
     switch (reloc_type) {
         case R_X86_64_32:
@@ -38,12 +38,12 @@ int code_reloc (int reloc_type)
 
 static ElfW_Rel *qrel; /* ptr to next reloc entry reused */
 
-void relocate_init(Section *sr)
+ST_FUNC void relocate_init(Section *sr)
 {
     qrel = (ElfW_Rel *) sr->data;
 }
 
-void relocate(ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
+ST_FUNC void relocate(ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
     int sym_index, esym_index;
 

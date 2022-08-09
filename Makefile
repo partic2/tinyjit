@@ -3,8 +3,8 @@ test:test_exe
 #	objdump -d myobj2.o
 	
 
-test_exe:test.c xxx-gen.c tccutils.c tccelf.c tcc-platform.c
-	$(CC) -o test_exe $^ -g -ggdb3 
+test_exe:
+	$(CC) -o test_exe test.c -g -ggdb3 
 
 clean:
 	- rm test_exe

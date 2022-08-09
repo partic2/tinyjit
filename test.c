@@ -1,13 +1,14 @@
 
-#include "tccdef.h"
-#include "xxx-gen.h"
-#include "tccelf.h"
-#include "tccutils.h"
 
+/* config flag , see src/config.h for detail help */
+#define TCC_IMPORT_BY_INCLUDE_ALL 1
+#define TCC_TARGET_X86_64
+#define TCC_WINDOWS_ABI
+#define TCC_IS_NATIVE 1
+
+#include "src/tccutils.h"
 #include <stdio.h>
 
-
-#include "tcc-platform.h"
 
 static int testGenObjectFile(){
     FILE *f;
@@ -193,7 +194,7 @@ static int testRunInMemory(){
 int main(int argc,char *argv[]){
     testGenObjectFile();
     testLoadAndMergeObjectFile();
-    #ifdef TCC_IS_NATIVE
+    #if TCC_IS_NATIVE
     testRunInMemory();
     #endif
     return 0;

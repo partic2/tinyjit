@@ -1,17 +1,21 @@
 
 #if defined _WIN32
+
 #include <windows.h>
-extern void *tcc_alloc_executable_memory(unsigned int size){
+
+#include "tccdef.h"
+LIBTCCAPI void *tcc_alloc_executable_memory(unsigned int size){
     return VirtualAlloc(NULL,size,MEM_COMMIT,PAGE_EXECUTE_READWRITE);
 }
-extern void tcc_free_executable_memory(void *ptr,unsigned int size){
+LIBTCCAPI void tcc_free_executable_memory(void *ptr,unsigned int size){
     VirtualFree(ptr,size,MEM_RELEASE);
 }
 #else
-#include "tccutils.h"
 #include <unistd.h>
 #include <sys/mman.h>
-extern void *tcc_alloc_executable_memory(unsigned int size){
+#include "tccdef.h"
+#include "tccutils.h"
+LIBTCCAPI void *tcc_alloc_executable_memory(unsigned int size){
 	int fd;
     char tmpfile[255];
     char *tmpdir=getenv("TMPDIR");
@@ -48,7 +52,7 @@ extern void *tcc_alloc_executable_memory(unsigned int size){
 
 	return retval;
 }
-extern void tcc_free_executable_memory(void *ptr,unsigned int size){
+LIBTCCAPI void tcc_free_executable_memory(void *ptr,unsigned int size){
     munmap(ptr,size);
 }
 #endif

@@ -289,16 +289,6 @@ static void gadd_sp(int val)
     }
 }
 
-#if defined TCC_TARGET_PE
-static void gen_static_call(int v)
-{
-    Sym *sym;
-
-    sym = external_global_sym(v, &func_old_type, 0);
-    oad(0xe8, -4);
-    greloc(ind-4,sym, R_386_PC32);
-}
-#endif
 
 /* 'is_jmp' is '1' if it is a jump */
 static void gcall_or_jmp(int is_jmp)

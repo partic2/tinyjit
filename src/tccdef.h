@@ -7,8 +7,8 @@
 #include "config.h"
 #include "elf.h"
 
-#define ST_FUNC extern
-#define ST_DATA extern
+#define ST_FUNC static
+#define ST_DATA 
 #define LIBTCCAPI extern
 
 
@@ -18,7 +18,7 @@ typedef uint32_t FLAG_GROUP;
 
 /* types */
 #define VT_TYPE      0xffff
-#define VT_VOID           0  /* void type */
+#define VT_VOID2           0  /* void type ,VT_VOID conflict with windows.h*/
 #define VT_INT8        0x01  /* signed byte type */
 #define VT_INT16       0x02  /* short type */
 #define VT_INT32       0x03  /* integer type */

@@ -74,7 +74,7 @@ ST_FUNC struct reg_attr *get_reg_attr(int r) { return reg_attrs + r; }
 /******************************************************/
 
 
-void o(uint32_t i) {
+static void o(uint32_t i) {
   /* this is a good place to start adding big-endian support*/
   int ind1;
   ind1 = ind + 4;
@@ -143,7 +143,7 @@ static uint32_t stuff_const(uint32_t op, uint32_t c) {
 }
 
 // only add,sub
-void stuff_const_harder(uint32_t op, uint32_t v) {
+ST_FUNC void stuff_const_harder(uint32_t op, uint32_t v) {
   uint32_t x;
   x = stuff_const(op, v);
   if (x)
@@ -200,7 +200,7 @@ void stuff_const_harder(uint32_t op, uint32_t v) {
   }
 }
 
-uint32_t encbranch(int pos, int addr, int fail) {
+ST_FUNC uint32_t encbranch(int pos, int addr, int fail) {
   addr -= pos + 8;
   addr /= 4;
   if (addr >= 0x1000000 || addr < -0x1000000) {
@@ -211,7 +211,7 @@ uint32_t encbranch(int pos, int addr, int fail) {
   return 0x0A000000 | (addr & 0xffffff);
 }
 
-int decbranch(int pos) {
+ST_FUNC int decbranch(int pos) {
   int x;
   x = *(uint32_t *)(cur_text_section()->data + pos);
   x &= 0x00ffffff;
@@ -221,7 +221,7 @@ int decbranch(int pos) {
 }
 
 /* output a symbol and patch all calls to it */
-void gsym_addr(int t, int a) {
+ST_FUNC void gsym_addr(int t, int a) {
   uint32_t *x;
   int lt;
   while (t) {
@@ -236,7 +236,7 @@ void gsym_addr(int t, int a) {
   }
 }
 
-void gsym(int t) { gsym_addr(t, ind); }
+ST_FUNC void gsym(int t) { gsym_addr(t, ind); }
 
 
 static uint32_t vfpr(int r) {
@@ -346,7 +346,7 @@ static int negcc(int cc) {
 }
 
 /* load 'r' from value 'sv' */
-void load(int r, SValue *sv) {
+ST_FUNC void load(int r, SValue *sv) {
   int v, ft, fc, fr, tr, sign;
   uint32_t op;
   SValue v1;
@@ -473,7 +473,7 @@ void load(int r, SValue *sv) {
 }
 
 /* store register 'r' in lvalue 'v' */
-void store(int r, SValue *sv) {
+ST_FUNC void store(int r, SValue *sv) {
   SValue v1;
   int v, ft, fc, fr, sign;
   uint32_t op;
@@ -599,7 +599,7 @@ struct avail_regs {
    avregs: opaque structure to keep track of available VFP co-processor regs
    align: alignment constraints for the param, as returned by type_size()
    size: size of the parameter, as returned by type_size() */
-int assign_vfpreg(struct avail_regs *avregs, int align, int size) {
+ST_FUNC int assign_vfpreg(struct avail_regs *avregs, int align, int size) {
   int first_reg = 0;
 
   if (avregs->first_free_reg == -1)
@@ -950,9 +950,8 @@ ST_FUNC void gfunc_call(int nb_args,CType *ret_type) {
 }
 
 /* generate function prolog of type 't' */
-void gfunc_prolog(Sym *func_sym)
+ST_FUNC void gfunc_prolog()
 {
-  CType *func_type = &func_sym->type;
   SValue *sv;
   int n, nf, size, rs, struct_ret = 0;
   uint32_t align;
@@ -1039,7 +1038,7 @@ from_stack:
 
 
 /* generate function epilog */
-void gfunc_epilog(void)
+ST_FUNC void gfunc_epilog(void)
 {
   uint32_t x;
   int diff,btype;
@@ -1104,7 +1103,7 @@ ST_FUNC void gen_fill_nops(int bytes) {
 }
 
 /* generate a jump to a label */
-int gjmp(int t) {
+ST_FUNC int gjmp(int t) {
   int r;
   r = ind;
   o(0xE0000000 | encbranch(r, t, 1));
@@ -1112,10 +1111,10 @@ int gjmp(int t) {
 }
 
 /* generate a jump to a fixed address */
-void gjmp_addr(int a) { gjmp(a); }
+ST_FUNC void gjmp_addr(int a) { gjmp(a); }
 
 /* generate a test. set 'inv' to invert test. Stack entry is popped */
-int gtst(int inv, int t) {
+ST_FUNC int gtst(int inv, int t) {
   int v, r;
   uint32_t op;
 
@@ -1155,7 +1154,7 @@ int gtst(int inv, int t) {
 }
 
 /* generate an integer binary operation */
-void gen_opi(int op) {
+ST_FUNC void gen_opi(int op) {
   int c, func = 0;
   uint32_t opc = 0, r, fr;
 
@@ -1320,7 +1319,7 @@ static int is_zero(int i) {
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
  *    two operands are guaranteed to have the same floating point type */
-void gen_opf(int op) {
+ST_FUNC void gen_opf(int op) {
   uint32_t x;
   int fneg = 0, r;
   x = 0xEE000A00 | T2CPR(vtop->type.t);
@@ -1451,7 +1450,7 @@ ST_FUNC void gen_cvt_itof(int t) {
 }
 
 /* convert fp to int 't' type */
-void gen_cvt_ftoi(int t) {
+ST_FUNC void gen_cvt_ftoi(int t) {
   uint32_t r, r2;
   int u, func = 0;
   u = t & VT_UNSIGNED;
@@ -1474,7 +1473,7 @@ void gen_cvt_ftoi(int t) {
 
 
 /* computed goto support */
-void ggoto(void) {
+ST_FUNC void ggoto(void) {
   gcall_or_jmp(1);
   vtop--;
 }

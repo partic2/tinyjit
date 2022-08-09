@@ -20,4 +20,14 @@
 
 /*-------------host---------------*/
 //If host is in the same as target.
-#define TCC_IS_NATIVE
+//#define TCC_IS_NATIVE
+
+
+/*-------------library------------*/
+//use this library by include all required files.
+//this is  temporary solution , because PUBLIC API haven't finish. 
+//this is a easy way to avoid name conflict.
+//In this case, #include "tccutils.h" to import this library.
+//#define TCC_IMPORT_BY_INCLUDE_ALL 1
+
+

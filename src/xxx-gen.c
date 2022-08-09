@@ -67,13 +67,7 @@ ST_FUNC void vpushi(int v)
     vsetc(&int_type, VT_CONST, &cval);
 }
 
-/* push a pointer sized constant */
-static void vpushs(addr_t v)
-{
-  CValue cval;
-  cval.i = v;
-  vsetc(&ptr_type, VT_CONST, &cval);
-}
+
 
 /* push arbitrary long constant */
 ST_FUNC void vpushl(int ty, unsigned long long v)
