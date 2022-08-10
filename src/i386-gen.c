@@ -43,7 +43,9 @@ static struct reg_attr regs_attr [NB_REGS] = {
 
 static unsigned long func_sub_sp_offset;
 
-struct s_abi_config abi_config;
+ST_DATA struct s_abi_config{
+	char func_call;
+} abi_config;
 
 
 ST_FUNC void arch_gen_init(){

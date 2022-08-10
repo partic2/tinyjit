@@ -36,9 +36,7 @@ enum {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
-extern struct s_abi_config{
-	char func_call;
-} abi_config;
+
 /* func_call */
 #define FUNC_CDECL     0 /* standard c call */
 #define FUNC_STDCALL   1 /* pascal c call */

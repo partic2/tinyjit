@@ -57,7 +57,11 @@ static struct reg_attr reg_attrs[NB_REGS] = {
 
 static int func_sub_sp_offset,last_itod_magic;
 static int leaffunc;
-struct s_abi_config abi_config;
+
+ST_DATA struct s_abi_config{
+    int float_abi;
+    int eabi;
+} abi_config;
 
 
 ST_FUNC void arch_gen_init() {

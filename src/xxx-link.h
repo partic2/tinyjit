@@ -8,7 +8,6 @@
 
 
 #define TCC_OUTPUT_FORMAT_BINARY 1
-extern uint32_t output_format;
 
 #ifdef TCC_TARGET_I386
 #include "i386-link.h"

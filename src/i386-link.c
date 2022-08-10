@@ -8,7 +8,6 @@
 
 static ElfW_Rel *qrel;
 
-uint32_t output_format;
 /* Returns 1 for a code relocation, 0 for a data relocation. For unknown
    relocations, returns -1. */
 ST_FUNC int code_reloc (int reloc_type)
@@ -62,15 +61,9 @@ ST_FUNC void relocate(ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, 
             write32le(ptr, val);
             return;
         case R_386_16:
-            if (output_format != TCC_OUTPUT_FORMAT_BINARY) {
-            output_file:
-                tcc_error("can only produce 16-bit binary files");
-            }
             write16le(ptr, read16le(ptr) + val);
             return;
         case R_386_PC16:
-            if (output_format != TCC_OUTPUT_FORMAT_BINARY)
-                goto output_file;
             write16le(ptr, read16le(ptr) + val - addr);
             return;
         case R_386_RELATIVE:

@@ -25,7 +25,7 @@
 #include "xxx-gen.h"
 
 #define assert(a)
-struct reg_attr regs_attr[NB_REGS] = {
+static struct reg_attr regs_attr[NB_REGS] = {
     /* rax */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE},
     /* rcx */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE},
     /* rdx */ {RC_INT | RC_CALLER_SAVED, REGISTER_SIZE},

@@ -84,10 +84,6 @@ enum {
 /* maximum alignment (for aligned attribute support) */
 #define MAX_ALIGN     8
 
-extern struct s_abi_config{
-    int float_abi;
-    int eabi;
-} abi_config;
 
 /* float abi */
 #define ARM_SOFT_FLOAT 1

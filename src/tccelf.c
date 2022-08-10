@@ -36,21 +36,21 @@ static int new_undef_sym =
     0; /* Is there a new undefined sym since last new_undef_sym() */
 
 /* sections */
-Section **sections;
-int nb_sections; /* number of sections, including first dummy section */
+static Section **sections;
+static int nb_sections; /* number of sections, including first dummy section */
 
-Section **priv_sections;
-int nb_priv_sections; /* number of private sections */
+static Section **priv_sections;
+static int nb_priv_sections; /* number of private sections */
 
 /* temporary dynamic symbol sections (for dll loading) */
-Section *dynsymtab_section;
+static Section *dynsymtab_section;
 /* exported dynamic symbol section */
-Section *dynsym;
+static Section *dynsym;
 /* copy of the global symtab_section variable */
-Section *symtab;
+static Section *symtab;
 /* extra attributes (eg. GOT/PLT value) for symtab symbols */
-struct sym_attr *sym_attrs;
-int nb_sym_attrs;
+static struct sym_attr *sym_attrs;
+static int nb_sym_attrs;
 
 /* special flag to indicate that the section should not be linked to the other
  * ones */

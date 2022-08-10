@@ -5,12 +5,10 @@
 #include "xxx-gen.h"
 
 
-SValue *__vstack, *vtop;
-uint32_t ind,loc;
 
-CType int_type;
-CType int64_type;
-CType ptr_type;
+ST_DATA CType int_type;
+ST_DATA CType int64_type;
+ST_DATA CType ptr_type;
 
 
 ST_FUNC uint32_t get_VT_INT_TYPE_of_size(unsigned int size){
@@ -396,12 +394,12 @@ ST_FUNC int gen_ldr(){
 
 #define MAX_TEMP_LOCAL_VARIABLE_NUMBER 0x10
 /*list of temporary local variables on the stack in current function. */
-struct temp_local_variable {
+static struct temp_local_variable {
 	int location; //offset on stack. Svalue.c.i
 	short size;
 	short align;
 } arr_temp_local_vars[MAX_TEMP_LOCAL_VARIABLE_NUMBER];
-short nb_temp_local_vars;
+static short nb_temp_local_vars;
 
 
 

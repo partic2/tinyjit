@@ -7,9 +7,11 @@
 #include "config.h"
 #include "elf.h"
 
+#if TCC_IMPORT_BY_INCLUDE_ALL
 #define ST_FUNC static
-#define ST_DATA 
+#define ST_DATA static
 #define LIBTCCAPI extern
+#endif
 
 
 typedef uint32_t FLAG_GROUP;

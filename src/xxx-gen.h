@@ -38,9 +38,9 @@ typedef struct SValue {
 	struct Sym *sym;
 } SValue;
 
-extern SValue *vtop;
+ST_DATA SValue *vtop;
 
-extern SValue *__vstack;
+ST_DATA SValue *__vstack;
 #define vstack (__vstack+1)
 
 /* a register can belong to several classes. */
@@ -124,7 +124,7 @@ struct reg_attr{
 #define ERR_OPERAND_TYPE 0x11;
 
 
-extern uint32_t ind, loc;
+ST_DATA uint32_t ind, loc;
 
 ST_FUNC uint32_t get_VT_INT_TYPE_of_size(unsigned int size);
 ST_FUNC unsigned int size_align_of_type(uint32_t type,uint32_t *align);
